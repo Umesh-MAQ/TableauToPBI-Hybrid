@@ -441,8 +441,50 @@ def build_table_file(table: Dict, ir: Dict, decisions: Dict, seq: int) -> str:
         lines += [B.calc_column_block(part["name"], dax, part["dataType"],
                                       part["format"], seq * 1000 + 500 + j), ""]
         seen.add(part["name"].lower())
+    # Tableau drill-path hierarchies whose levels all resolve to columns on THIS
+    # table -> emit a Power BI model hierarchy. A hierarchy whose levels span
+    # several tables (no single owner) is skipped here rather than emitted with a
+    # dangling column reference that would break Power BI Desktop.
+    emitted_col_names = [c["name"] for c in cols] + [c["name"] for c in calc_cols]
+    for k, hb in enumerate(_hierarchies_for_table(emitted_col_names, ir, seq * 1000 + 800)):
+        lines += [hb, ""]
     lines.append(_partition_for(table, ir, cols, decisions))
     return "\n".join(lines)
+
+
+def _norm_ident(text: str) -> str:
+    """Normalise a column/level identifier for tolerant matching."""
+    return re.sub(r"[\s_/\-]", "", text or "").lower()
+
+
+def _hierarchies_for_table(col_names: List[str], ir: Dict, seq: int) -> List[str]:
+    """Return TMDL hierarchy blocks for IR drill-paths owned by this table.
+
+    A hierarchy is "owned" by a table only when EVERY level resolves to a real
+    column on that table (matched case-insensitively, tolerant of space/_/-/​/
+    differences between the Tableau caption and the emitted column name). Levels
+    are mapped back to the actual emitted column name so ``column:`` is always
+    valid. Hierarchies whose levels do not all resolve here are left for whichever
+    table owns them — or skipped entirely if no single table owns them all.
+    """
+    by_norm = {_norm_ident(c): c for c in col_names}
+    blocks: List[str] = []
+    for h, hier in enumerate(ir.get("hierarchies", []) or []):
+        levels = hier.get("levels") or []
+        if len(levels) < 2:
+            continue
+        resolved: List[tuple] = []
+        for lvl in levels:
+            col = by_norm.get(_norm_ident(lvl))
+            if col is None:
+                resolved = []
+                break
+            resolved.append((lvl, col))
+        if resolved:
+            blocks.append(B.hierarchy_block(hier.get("name") or "Hierarchy",
+                                            resolved, seq + h * 32))
+    return blocks
+
 
 
 def _date_part_columns(table: Dict, cols: List[Dict], ir: Dict) -> List[Dict]:
@@ -774,9 +816,28 @@ def _probe_for_table(table: Dict, ir: Dict) -> Dict | None:
     if result is None:
         return None
     ir_cols = ir.get("columns", [])
+    # Scope the IR columns used for header->logical matching to THIS table's
+    # physical CSV. Otherwise columns that share a normalized name across tables
+    # (e.g. fact 'Customer ID' vs dim 'Customer_ID', 'Postal Code' vs
+    # 'Postal_Code') collide and the later one wins, renaming a fact's foreign
+    # key to the dim's spelling and breaking the relationship in Power BI.
+    base = _normalize_name(os.path.basename(str(raw_path)))
+    scoped = [c for c in ir_cols
+              if _normalize_name(str(c.get("physicalTable") or "")) == base]
+    if scoped:
+        match_cols = scoped
+    else:
+        # Nothing resolved to this physical table. Only fall back to the global
+        # column set when it is collision-free: a single physical table, or no
+        # lineage at all (a genuinely single-flat source). With two-or-more
+        # physical tables the global fallback is exactly what corrupts a fact's
+        # foreign keys, so refuse it and match the raw headers instead.
+        phys = {_normalize_name(str(c.get("physicalTable")))
+                for c in ir_cols if c.get("physicalTable")}
+        match_cols = ir_cols if len(phys) <= 1 else []
     return {
         "delimiter": result["delimiter"],
-        "columns": _build_csv_columns(result["headers"], ir_cols),
+        "columns": _build_csv_columns(result["headers"], match_cols),
     }
 
 
@@ -918,7 +979,7 @@ def _build_calculated_table_tmdl(ct: Dict, lineage_base: int) -> str:
             f"\t\tdataType: {col.get('dataType', 'string')}",
         ]
         if col.get("formatString"):
-            lines.append(f"\t\tformatString: {col['formatString']}")
+            lines.append(f"\t\tformatString: {B.safe_format_string(col['formatString'])}")
         lines += [
             f"\t\tlineageTag: {ctag}",
             f"\t\tsummarizeBy: {col.get('summarizeBy', 'none')}",

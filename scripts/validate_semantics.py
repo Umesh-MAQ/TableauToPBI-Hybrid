@@ -65,7 +65,7 @@ def parse_semantic_model(sm_dir: str) -> Dict:
     tables_dir = os.path.join(sm_dir, "definition", "tables")
     model: Dict = {
         "columns": {}, "colTypes": {}, "measures": set(),
-        "measureHost": {}, "measureDax": {},
+        "measureHost": {}, "measureDax": {}, "calcColDax": {},
     }
     for path in sorted(glob.glob(os.path.join(tables_dir, "*.tmdl"))):
         _parse_table_file(path, model)
@@ -95,9 +95,14 @@ def _parse_table_file(path: str, model: Dict) -> None:
         # one-tab declarations
         if ln.startswith("\tcolumn "):
             flush_measure(); cur_measure = ""; measure_dax = []
-            cur_col = _name_after(ln[len("\tcolumn "):])
+            rest = ln[len("\tcolumn "):]
+            cur_col = _name_after(rest)
             model["columns"][table].add(cur_col)
             cols.add(cur_col)
+            # A calculated column carries inline DAX after ` = `; record it so the
+            # measure-reference (cyclic-reference) check can inspect it.
+            if "=" in rest:
+                model["calcColDax"][(table, cur_col)] = rest.split("=", 1)[1].strip()
             continue
         if ln.startswith("\tmeasure "):
             flush_measure()
@@ -235,6 +240,26 @@ def check_measures(model: Dict, errors: List[str], warnings: List[str]) -> None:
                 f"(possible unresolved Tableau reference)")
 
 
+def check_calc_columns(model: Dict, errors: List[str]) -> None:
+    """Flag any calculated column whose DAX references a MEASURE.
+
+    Power BI wraps a measure referenced from a calc column in an implicit
+    CALCULATE (context transition), which makes the column depend on every column
+    of its own table — including itself — so the model refresh dies with
+    "A cyclic reference was encountered during evaluation." Such logic belongs in
+    a measure, which can also react to slicers (a calc column cannot)."""
+    for (table, col), dax in model.get("calcColDax", {}).items():
+        qualified_cols = {c for _, _, c in _QUALIFIED.findall(dax)}
+        for ref in _BARE.findall(dax):
+            if ref in qualified_cols:
+                continue
+            if ref in model["measures"]:
+                errors.append(
+                    f"calculated column '{table}'[{col}]: references measure [{ref}] "
+                    f"— a calc column cannot reference a measure (causes a cyclic "
+                    f"reference at refresh). Express this logic as a measure instead.")
+
+
 def check_pbir(report_dir: str, errors: List[str]) -> None:
     allowed = {"$schema", "name", "position", "visual", "visualGroup",
                "howCreated", "filterConfig"}
@@ -279,6 +304,7 @@ def validate(root: str) -> int:
 
     check_relationships(model, rels, errors)
     check_measures(model, errors, warnings)
+    check_calc_columns(model, errors)
     if report_dir:
         check_pbir(report_dir, errors)
 

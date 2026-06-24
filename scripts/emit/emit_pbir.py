@@ -561,6 +561,11 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
     mset = set(mlist)
     cols = B.column_names(ir)
     valf = ws.get("valueField") if ws else None
+    # Parameter-echo measures ('Current Year' = SELECTEDVALUE of the year slicer)
+    # return a constant scalar, not a metric. They must never be a card headline
+    # or a plotted series, else every KPI tile shows '2023' and charts grow a flat
+    # year bar. Computed once here and excluded at every value-selection point.
+    echo = B.parameter_echo_measures(decisions)
     # With no agent decision, recover an executive KPI/BAN tile (CY/PY measures +
     # date sparkline) so it renders as a stacked card instead of a wide dimension
     # dump. The kpiStack branch below returns before the table fallback.
@@ -568,6 +573,25 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         kvd = _kpi_tile_decision(ws, mset)
         if kvd:
             vd = kvd
+    # An explicit 'kpiStack' decision (the screenshot layer sees the big-number +
+    # ▲% vs PY + sparkline tile and marks the worksheet as kpiStack) is enriched
+    # with the CY/PY/%Diff measures and date grain the deterministic recovery
+    # derives. A plain 'card' decision is ALSO upgraded when the worksheet has the
+    # exact executive-KPI shape (CY/PY[/% Diff] measures over a date sparkline) so
+    # every KPI tile renders like the Tableau dashboard -- big number + ▲% vs PY +
+    # 12-month trend -- regardless of whether the agent (or a screenshot hint)
+    # labelled it 'card' or 'kpiStack'. If the worksheet lacks that KPI shape an
+    # explicit kpiStack degrades to a plain card so it still shows a single number.
+    elif (vtype in ("kpiStack", "card") or vd.get("visualType") in ("kpiStack", "card")) \
+            and not vd.get("kpiStack"):
+        kvd = _kpi_tile_decision(ws, mset)
+        if kvd:
+            for k, v in vd.items():
+                if k not in ("visualType", "reason", "worksheet"):
+                    kvd[k] = v
+            vd, vtype = kvd, "kpiStack"
+        elif vtype == "kpiStack":
+            vtype = "card"
     # Last-resort rescue: a worksheet with a plotted date axis + measure pills that
     # stayed ambiguous (no agent decision -> tableEx fallback) is a time trend, not
     # a flat table. Promote it to a line chart so the deterministic path shows the
@@ -630,9 +654,17 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
 
     # Single-value card: measure value, else a text/dimension column value.
     if vtype == "card":
+        # A KPI card's headline is the metric, never the year selector. The parser
+        # often sets ``valueField`` to the first measure pill, which on a Tableau
+        # KPI sheet is the 'Current Year' parameter echo -> the card would show
+        # '2023'. Skip echo measures and pick the worksheet's real metric (CY
+        # Sales / CY Profit / …) matching the sheet name.
         m = (vd.get("value") if vd.get("value") in mset else None) \
-            or (valf if valf in mset else None) \
-            or B.measure_for_pill(ws, decisions, mset)
+            or (valf if (valf in mset and valf not in echo) else None) \
+            or B.kpi_value_measure(ws, ws_name, mset, echo, decisions)
+        if not m:
+            mp = B.measure_for_pill(ws, decisions, mset)
+            m = mp if (mp and mp not in echo) else None
         if m:
             return P.card_visual(name, pos, entity, m, title=ws_name, theme=theme,
                                  display_units=units.get(m, 1))
@@ -762,6 +794,16 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         else:
             catbind = None  # resolved below
         valbind = value_bind()
+        # A parameter-echo measure ('Current Year') is a constant year, not a
+        # plottable metric; if the primary value resolved to one (the parser's
+        # first-pill guess), swap it for the first real measure on the shelf so the
+        # chart shows the metric instead of a flat year bar.
+        if valbind.get("isMeasure") and valbind.get("prop") in echo:
+            alt = next((v for v in ((ws.get("cols") or []) + (ws.get("rows") or [])
+                                    + (ws.get("values") or []))
+                        if v in mset and v not in echo), None)
+            if alt:
+                valbind = _with_units({"entity": entity, "prop": alt, "isMeasure": True})
         fp = B.field_param_for_ws(ws_name, decisions)
         if catbind is None:
             if fp is not None:
@@ -787,11 +829,13 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
             sort = P.measure_sort(entity, valbind["prop"]) if valbind.get("isMeasure") else None
         elif sd == "categoryAsc":
             sort = P.column_sort(catbind["entity"], catbind["prop"])
-        # Secondary / additional measures (e.g. PY lines on KPI sparklines)
+        # Secondary / additional measures (e.g. PY lines on KPI sparklines).
+        # Parameter-echo measures ('Current Year') are constants, never a series.
         sec_v = vd.get("secondaryValue")
-        sec_bind = _with_units({"entity": entity, "prop": sec_v, "isMeasure": True}) if sec_v and sec_v in mset else None
+        sec_bind = _with_units({"entity": entity, "prop": sec_v, "isMeasure": True}) \
+            if sec_v and sec_v in mset and sec_v not in echo else None
         add_binds = [_with_units({"entity": entity, "prop": av, "isMeasure": True})
-                     for av in (vd.get("additionalValues") or []) if av in mset]
+                     for av in (vd.get("additionalValues") or []) if av in mset and av not in echo]
         # Tooltip fields: Tableau shows the mark-card measures on hover. Auto-add
         # the worksheet's extra measures (beyond the plotted Y) plus any explicit
         # decisions.tooltips, so the PBI hover matches Tableau's tooltip.
@@ -811,7 +855,7 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         if not add_binds and not sec_bind and not series:
             shelf_meas, seen_m = [], set()
             for f in (ws.get("rows") or []) + (ws.get("cols") or []):
-                if f in mset and f != primary and f not in seen_m:
+                if f in mset and f != primary and f not in seen_m and f not in echo:
                     seen_m.add(f)
                     shelf_meas.append(f)
             add_binds = [_with_units({"entity": entity, "prop": m, "isMeasure": True})
@@ -855,9 +899,13 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
             return {"entity": ent, "prop": spec, "isMeasure": spec in mset}
         # Deterministic fallback when no agent decision: rows/cols from the
         # worksheet shelf, value from the measure pill mapped to its model measure.
+        # A parameter-echo measure ('Current Year') is a constant year, not a
+        # cell value, so it is never used as the matrix measure.
         mapped_m = B.measure_for_pill(ws, decisions, mset)
+        if mapped_m in echo:
+            mapped_m = None
         det_vals = [mapped_m] if mapped_m else [v for v in (ws.get("values") or [])
-                                                if ws and v in mset]
+                                                if ws and v in mset and v not in echo]
         rows = [_bind(r) for r in (vd.get("rows") or _shelf_dims(ws, "rows", cols))]
         cols_m = [_bind(c) for c in (vd.get("columns") or _shelf_dims(ws, "cols", cols))]
         vals = [_bind(v) for v in (vd.get("values") or det_vals)]
@@ -1015,7 +1063,10 @@ def build_page(dashboard: Dict, ir: Dict, decisions: Dict, pages_dir: str,
     # Navigation buttons: Tableau goto-sheet buttons -> Power BI actionButton with
     # page navigation. Toggle (show/hide) buttons -> a bookmark pair + two stacked
     # bookmark buttons (handled in the toggle loop below).
-    btn_fill = theme.get("markColor") or theme.get("outspace") or "#004263"
+    # The auto-derived theme can carry a transparent mark colour ('#00000000'),
+    # which would paint the buttons as invisible all-white tiles; opaque_color
+    # guarantees a visible solid fill regardless of the source theme.
+    btn_fill = P.opaque_color(theme.get("markColor") or theme.get("outspace"), "#004263")
     bz = 1000
     for button in dashboard.get("buttons", []):
         if button.get("action") != "goto-sheet":

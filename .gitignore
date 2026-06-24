@@ -6,12 +6,7 @@ __pycache__/
 **/.pbi/localSettings.json
 **/.pbi/cache.abf
 
-# Generated migration outputs are reproducible from the source .twb -> keep them
-# out of the repo so pushes stay small. EXCEPTION: agent-fragment.json is the
-# agent-authored gap-fill (measures/visualDecisions); it is NOT reproducible
-# without re-running the LLM, so it is kept under version control. A clone can
-# then regenerate every .pbip deterministically via `migrate.py finish`.
-Output/*
-!Output/*/
-Output/*/*
-!Output/*/agent-fragment.json
+# Generated migration outputs (the whole Output/ tree) are produced by the
+# pipeline and are not version-controlled -- keep the repo small and free of
+# regenerable artifacts. Run `migrate.py run "<data dir>"` to regenerate them.
+Output/

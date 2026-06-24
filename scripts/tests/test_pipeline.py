@@ -27,6 +27,8 @@ sys.path.insert(0, SCRIPTS)
 
 import twb_xml as X  # noqa: E402
 import twb_datasources as DS  # noqa: E402
+import twb_meta as TM  # noqa: E402
+import tmdl_blocks as B  # noqa: E402
 import map_dax as M  # noqa: E402
 import reconcile as R  # noqa: E402
 import emit_tmdl as ET  # noqa: E402
@@ -40,7 +42,7 @@ import merge_decisions as MD  # noqa: E402
 import validate_semantics as VS  # noqa: E402
 import pbir_bind as PBB  # noqa: E402
 import migrate as MG  # noqa: E402
-
+import screenshot_overlay as SO  # noqa: E402
 SALES_TWB = os.path.join(ROOT, "Data", "Sales and Customer", "Sales & Customer Dashboards.twb")
 
 MIDNIGHT_TWB = os.path.join(ROOT, "Data", "Midnight Census", "Midnight Census Dashboard.twb")
@@ -829,6 +831,64 @@ class TestTableauFormat(unittest.TestCase):
         self.assertIsNone(cols[1]["format"])
 
 
+class TestSafeFormatString(unittest.TestCase):
+    """A formatString that STARTS with a double quote makes the TMDL parser treat
+    the whole value as a quoted string and Power BI Desktop rejects it
+    (InvalidValueFormat / un-escaped quote marker) — and tmdl-validate misses it.
+    safe_format_string must neutralise that at every emit point, regardless of
+    whether the value came from the deterministic converter, decisions.json, or
+    an agent-authored fragment."""
+
+    def test_leading_currency_literal_escaped(self):
+        self.assertEqual(B.safe_format_string('"$"#,##0.00'), '\\$#,##0.00')
+
+    def test_leading_literal_with_suffix(self):
+        # Mid-string quote (the "M" suffix) stays; only the leading literal moves.
+        self.assertEqual(B.safe_format_string('"$"#,##0,,"M"'), '\\$#,##0,,"M"')
+
+    def test_midstring_quote_untouched(self):
+        self.assertEqual(B.safe_format_string('#,##0,"K"'), '#,##0,"K"')
+
+    def test_plain_format_untouched(self):
+        self.assertEqual(B.safe_format_string("0.00%"), "0.00%")
+        self.assertEqual(B.safe_format_string("#,##0.00"), "#,##0.00")
+
+    def test_none_and_empty_passthrough(self):
+        self.assertIsNone(B.safe_format_string(None))
+        self.assertEqual(B.safe_format_string(""), "")
+
+    def test_multichar_leading_literal(self):
+        self.assertEqual(B.safe_format_string('"USD "#,##0'), '\\U\\S\\D\\ #,##0')
+
+    def test_unterminated_leading_quote_drops_quote(self):
+        # Malformed: never let the emitted value begin with a quote marker.
+        self.assertFalse(B.safe_format_string('"#,##0').startswith('"'))
+
+    def test_measure_block_sanitizes_agent_formatstring(self):
+        # End-to-end: an agent-authored measure with a leading-quote format must
+        # not emit a value that starts with a double quote.
+        block = B.measure_block(
+            {"name": "Total Sales", "dax": "SUM(Orders[Sales])",
+             "formatString": '"$"#,##0.00'}, 7)
+        line = next(l for l in block.splitlines() if "formatString:" in l)
+        self.assertIn('\\$#,##0.00', line)
+        self.assertNotIn('formatString: "', line)
+
+    def test_calc_column_block_sanitizes_formatstring(self):
+        block = B.calc_column_block(
+            "Amt", "RELATED(Orders[Sales])", "double", '"$"#,##0.00', 8)
+        line = next(l for l in block.splitlines() if "formatString:" in l)
+        self.assertIn('\\$#,##0.00', line)
+        self.assertNotIn('formatString: "', line)
+
+    def test_column_block_sanitizes_formatstring(self):
+        block = B.column_block(
+            {"name": "Amt", "dataType": "double", "format": '"$"#,##0.00'}, 9)
+        line = next(l for l in block.splitlines() if "formatString:" in l)
+        self.assertIn('\\$#,##0.00', line)
+        self.assertNotIn('formatString: "', line)
+
+
 class TestReassignOrphanMeasures(unittest.TestCase):
     """No measure may be silently dropped by build_table_file's exact match."""
 
@@ -951,6 +1011,79 @@ class TestNoDuplicateColumns(unittest.TestCase):
         self.assertEqual(self._decl_count(tmdl, "Order Date (Month)"), 1)
 
 
+class TestProbeColumnScoping(unittest.TestCase):
+    """Header->logical matching must be scoped to a table's own physical CSV.
+
+    Regression for the multi-table star-schema bug: a fact's foreign key
+    ('Customer ID' / 'Postal Code') shares a normalized name with a dim column
+    ('Customer_ID' / 'Postal_Code').  When _probe_for_table matched the fact's
+    headers against the GLOBAL IR column set, the dim's spelling won and the
+    fact's key was silently renamed -> the relationship failed to resolve in
+    Power BI Desktop.  Each table must only see its own physicalTable columns.
+    """
+
+    def _ir(self):
+        return {"columns": [
+            # Fact (Orders.csv) — note the SPACE spelling of the keys.
+            {"name": "Customer ID", "dataType": "string", "physicalTable": "Orders.csv"},
+            {"name": "Postal Code", "dataType": "string", "physicalTable": "Orders.csv"},
+            {"name": "Sales", "dataType": "double", "physicalTable": "Orders.csv"},
+            # Dim (Customers.csv) — UNDERSCORE spelling collides on normalize.
+            {"name": "Customer_ID", "dataType": "string", "physicalTable": "Customers.csv"},
+            {"name": "Name", "dataType": "string", "physicalTable": "Customers.csv"},
+            # Dim (Location.csv).
+            {"name": "Postal_Code", "dataType": "string", "physicalTable": "Location.csv"},
+            {"name": "State", "dataType": "string", "physicalTable": "Location.csv"},
+        ]}
+
+    def _probe(self, table, ir, headers):
+        orig = ET.CP.probe
+        try:
+            ET.CP.probe = lambda path: {"delimiter": ",", "headers": headers}
+            return ET._probe_for_table(table, ir)
+        finally:
+            ET.CP.probe = orig
+
+    def test_fact_key_keeps_own_spelling(self):
+        ir = self._ir()
+        table = {"name": "Orders", "role": "fact", "sourceFile": "Orders.csv"}
+        probe = self._probe(table, ir, ["Customer ID", "Postal Code", "Sales"])
+        names = {c["csv_name"]: c["name"] for c in probe["columns"]}
+        # The fact's keys must NOT be renamed to the dim underscore spellings.
+        self.assertEqual(names["Customer ID"], "Customer ID")
+        self.assertEqual(names["Postal Code"], "Postal Code")
+
+    def test_dim_key_keeps_own_spelling(self):
+        ir = self._ir()
+        table = {"name": "Customers", "role": "dim", "sourceFile": "Customers.csv"}
+        probe = self._probe(table, ir, ["Customer_ID", "Name"])
+        names = {c["csv_name"]: c["name"] for c in probe["columns"]}
+        self.assertEqual(names["Customer_ID"], "Customer_ID")
+
+    def test_unmatched_scope_in_multitable_does_not_pollute(self):
+        # If a table's CSV basename matches no physicalTable, the global fallback
+        # is refused (>=2 physical tables) so headers stay raw rather than being
+        # corrupted by a colliding sibling column.
+        ir = self._ir()
+        table = {"name": "Mystery", "role": "fact", "sourceFile": "Unknown.csv"}
+        probe = self._probe(table, ir, ["Customer ID", "Postal Code"])
+        names = {c["csv_name"]: c["name"] for c in probe["columns"]}
+        self.assertEqual(names["Customer ID"], "Customer ID")
+        self.assertEqual(names["Postal Code"], "Postal Code")
+
+    def test_single_flat_source_still_maps(self):
+        # With a single physical table (or no lineage), the normal fuzzy match
+        # still rewrites an underscore header to its logical spelling.
+        ir = {"columns": [
+            {"name": "Customer ID", "dataType": "string", "physicalTable": "Flat.csv"},
+            {"name": "Sales", "dataType": "double", "physicalTable": "Flat.csv"},
+        ]}
+        table = {"name": "Flat", "role": "fact", "sourceFile": "Flat.csv"}
+        probe = self._probe(table, ir, ["Customer_ID", "Sales"])
+        names = {c["csv_name"]: c["name"] for c in probe["columns"]}
+        self.assertEqual(names["Customer_ID"], "Customer ID")
+
+
 @unittest.skipUnless(os.path.isfile(MIDNIGHT_TWB), "Midnight Census workbook not present")
 class TestGoldenMidnightCensus(unittest.TestCase):
     """The deterministic path must reproduce the committed Output/ artifacts."""
@@ -990,6 +1123,57 @@ class TestNavButtonBlock(unittest.TestCase):
         v = PB.nav_button_visual("nav_2", PB.position(0, 0, 80, 40, 1000), "X", None)
         link = v["visual"]["visualContainerObjects"]["visualLink"][0]["properties"]
         self.assertNotIn("navigationSection", link)
+
+
+class TestButtonVisibility(unittest.TestCase):
+    """Buttons must never render as an invisible (transparent) tile.
+
+    Regression for the show/hide toggle buttons painting all-white: the
+    auto-derived theme adopted a transparent Tableau mark colour ('#00000000')
+    as the button fill. opaque_color() must sanitise that, and both button
+    builders must emit an opaque fill plus a visible outline.
+    """
+
+    def _fill(self, visual):
+        props = visual["visual"]["objects"]["fill"][0]["properties"]
+        return props["fillColor"]["solid"]["color"]["expr"]["Literal"]["Value"]
+
+    def _outline(self, visual):
+        return visual["visual"]["objects"]["outline"][0]["properties"]
+
+    def test_opaque_color_replaces_transparent(self):
+        # Fully transparent ARGB -> branded fallback, never kept as a fill.
+        self.assertEqual(PB.opaque_color("#00000000"), "#004263")
+        self.assertEqual(PB.opaque_color("#00ABCDEF"), "#004263")
+
+    def test_opaque_color_strips_non_transparent_alpha(self):
+        # #AARRGGBB with a visible alpha keeps the RGB and drops the alpha byte.
+        self.assertEqual(PB.opaque_color("#FF112233"), "#112233")
+
+    def test_opaque_color_passes_through_and_falls_back(self):
+        self.assertEqual(PB.opaque_color("#112233"), "#112233")
+        self.assertEqual(PB.opaque_color(None), "#004263")
+        self.assertEqual(PB.opaque_color("not-a-color"), "#004263")
+        self.assertEqual(PB.opaque_color("#abc"), "#004263")  # 3-digit unsupported
+
+    def test_bookmark_button_fill_is_opaque_with_outline(self):
+        v = PB.bookmark_button_visual(
+            "toggle_1", PB.position(0, 0, 80, 70, 1002),
+            "Hide Filters", "bm_hide", fill="#00000000")
+        self.assertEqual(self._fill(v), "'#004263'")  # transparent sanitised away
+        outline = self._outline(v)
+        self.assertEqual(outline["show"]["expr"]["Literal"]["Value"], "true")
+        self.assertIn("lineColor", outline)
+        self.assertIn("weight", outline)
+
+    def test_nav_button_fill_is_opaque_with_outline(self):
+        v = PB.nav_button_visual(
+            "nav_1", PB.position(0, 0, 120, 40, 1000),
+            "Go to Sales", "SalesDashboard", fill="#00000000")
+        self.assertEqual(self._fill(v), "'#004263'")
+        outline = self._outline(v)
+        self.assertEqual(outline["show"]["expr"]["Literal"]["Value"], "true")
+        self.assertIn("lineColor", outline)
 
 
 class TestNavTargetResolve(unittest.TestCase):
@@ -1854,6 +2038,21 @@ class TestInlineAggBinding(unittest.TestCase):
         ws = {"measures": [{"column": "ghost", "agg": "COUNTD"}]}
         self.assertIsNone(PBB.pill_agg_binding(ws, "t", {"show_id"}))
 
+    def test_pill_agg_binding_resolves_calc_column_via_field(self):
+        # Histogram customer-count axis: the pill's ``column`` is an internal
+        # Tableau alias (not a real column) but ``field`` names an agent-authored
+        # calculated column. COUNTD must bind to that calc column, NOT fall back to
+        # a parameter-echo year. (Regression: 'Customer Distribution' Y-axis.)
+        ws = {"measures": [{"column": "CY Sales (copy)_3221481164532666369",
+                            "agg": "COUNTD", "field": "CY Customers"}]}
+        decisions = {"calculatedColumns": [{"name": "CY Customers", "table": "Orders"}]}
+        b = PBB.pill_agg_binding(ws, "Orders", {"Order ID", "Customer ID"},
+                                 decisions=decisions)
+        self.assertIsNotNone(b)
+        self.assertEqual(b["prop"], "CY Customers")
+        self.assertEqual(b["agg"], 2)
+        self.assertEqual(b["entity"], "Orders")
+
     def test_binding_projection_emits_aggregation(self):
         proj = PB.binding_projection(
             {"entity": "netflix_titles", "prop": "show_id", "agg": 2,
@@ -2125,6 +2324,70 @@ class TestSynthesizePillMeasures(unittest.TestCase):
                          ["SUM(F[profit])", "SUM(F[sales])"])
 
 
+class TestSynthesizeLodBinColumns(unittest.TestCase):
+    """A { FIXED [A]: COUNTD([B]) } dimension-role LOD must become a calculated
+    COLUMN (a histogram bin axis), never a measure -- so a chart can group on it."""
+
+    def _ir(self):
+        return {
+            "columns": [
+                {"name": "Customer ID", "datasource": "S"},
+                {"name": "Order ID", "datasource": "S"},
+                {"name": "Order Date", "datasource": "S"},
+            ],
+            "calculatedFields": [
+                {"caption": "CY Customers", "role": "dimension",
+                 "formula": "IF YEAR([Order Date]) = [Select Year] THEN [Customer ID] END",
+                 "dependsOn": ["Order Date", "Select Year", "Customer ID"]},
+                {"caption": "CY Orders", "role": "dimension",
+                 "formula": "IF YEAR([Order Date]) = [Select Year] THEN [Order ID] END",
+                 "dependsOn": ["Order Date", "Select Year", "Order ID"]},
+                {"caption": "Nr of Orders per Customers", "role": "dimension",
+                 "isLOD": True,
+                 "formula": "{ FIXED [CY Customers]: COUNTD([CY Orders])}",
+                 "dependsOn": ["CY Customers", "CY Orders"]},
+            ],
+        }
+
+    def test_emits_allexcept_calc_column_on_fact(self):
+        tables = [{"name": "Orders", "role": "fact"}]
+        cols = MD.synthesize_lod_bin_columns(self._ir(), tables, "Orders")
+        self.assertEqual(len(cols), 1)
+        c = cols[0]
+        self.assertEqual(c["name"], "Nr of Orders per Customers")
+        self.assertEqual(c["table"], "Orders")
+        # THEN-branch resolves the nested calcs to the physical columns, not the
+        # IF-condition 'Order Date', and COUNTD -> DISTINCTCOUNT.
+        self.assertEqual(
+            c["dax"],
+            "CALCULATE(DISTINCTCOUNT(Orders[Order ID]), ALLEXCEPT(Orders, Orders[Customer ID]))")
+        self.assertEqual(c["dataType"], "int64")
+
+    def test_merge_drops_shadow_measure_keeps_column(self):
+        """When the agent wrongly authored the LOD as a measure, merge must drop the
+        measure and keep the deterministic calc column (so the axis is groupable)."""
+        ir = self._ir()
+        ir["workbook"] = {"pascalName": "Sales"}
+        schema = {"tableStrategy": "star-schema",
+                  "tables": [{"name": "Orders", "role": "fact"}],
+                  "relationships": []}
+        agent = {"measures": [
+                     {"table": "Orders", "name": "Nr of Orders per Customers",
+                      "dax": "DIVIDE([CY Orders],[CY Customers])"}],
+                 "calculatedColumns": []}
+        decisions = MD.merge(ir, {}, schema, agent)
+        names_m = {m["name"] for m in decisions["measures"]}
+        names_c = {c["name"] for c in decisions["calculatedColumns"]}
+        self.assertNotIn("Nr of Orders per Customers", names_m)
+        self.assertIn("Nr of Orders per Customers", names_c)
+
+    def test_no_lod_no_columns(self):
+        ir = {"columns": [{"name": "x"}], "calculatedFields": [
+            {"caption": "Plain", "role": "measure", "formula": "SUM([x])"}]}
+        self.assertEqual(
+            MD.synthesize_lod_bin_columns(ir, [{"name": "F", "role": "fact"}], "F"), [])
+
+
 class TestTextTableColumns(unittest.TestCase):
     """A Tableau text-table mark (only a Text pill, no rows/cols/values) must emit a
     single-column table of the text-encoded dimension — Detail/Tooltip dims in the
@@ -2148,6 +2411,351 @@ class TestTextTableColumns(unittest.TestCase):
               "encodings": {"text": "federated.x].[none:rating:nk"}}
         out = PBB.table_columns(ws, self._ir(), "t", set(), {"rating", "title"})
         self.assertEqual([c["prop"] for c in out], ["rating", "title"])
+
+
+class TestDrillPathHierarchies(unittest.TestCase):
+    """Tableau drill-path hierarchies -> Power BI model hierarchies."""
+
+    def _root(self, drill_xml: str):
+        import xml.etree.ElementTree as ETree
+        xml = (
+            "<workbook><datasources>"
+            "<datasource caption='Sales' name='federated.1'>"
+            f"{drill_xml}"
+            "</datasource></datasources></workbook>"
+        )
+        return ETree.fromstring(xml)
+
+    def test_compact_name_form_levels_recovered(self):
+        # Compact form: levels live in the name attr, no child <field> elements.
+        root = self._root(
+            "<drill-paths><drill-path name='Country_Region, State, City' />"
+            "</drill-paths>")
+        hiers = TM.extract_hierarchies(root)
+        self.assertEqual(len(hiers), 1)
+        self.assertEqual(hiers[0]["levels"], ["Country_Region", "State", "City"])
+
+    def test_verbose_field_form_still_works(self):
+        # The explicit <field> form remains the primary path.
+        root = self._root(
+            "<drill-paths><drill-path name='Geo'>"
+            "<field>[Country]</field><field>[State]</field>"
+            "</drill-path></drill-paths>")
+        hiers = TM.extract_hierarchies(root)
+        self.assertEqual(hiers[0]["levels"], ["Country", "State"])
+
+    def test_single_token_name_is_not_a_hierarchy(self):
+        # A one-word drill-path name must not be treated as a hierarchy.
+        root = self._root("<drill-paths><drill-path name='Country' /></drill-paths>")
+        self.assertEqual(TM.extract_hierarchies(root), [])
+
+    def test_hierarchy_block_references_columns(self):
+        block = B.hierarchy_block(
+            "Country_Region, State, City",
+            [("Country_Region", "Country_Region"), ("State", "State"),
+             ("City", "City")], 800)
+        self.assertIn("\thierarchy 'Country_Region, State, City'", block)
+        self.assertEqual(block.count("\t\tlevel "), 3)
+        self.assertIn("\t\t\tcolumn: Country_Region", block)
+        self.assertIn("\t\t\tcolumn: State", block)
+        self.assertIn("\t\t\tcolumn: City", block)
+
+    def test_emit_owns_hierarchy_when_all_levels_resolve(self):
+        ir = {"hierarchies": [
+            {"name": "Geo", "levels": ["Country_Region", "State", "City"]}]}
+        blocks = ET._hierarchies_for_table(
+            ["Postal_Code", "City", "State", "Region", "Country_Region"], ir, 1)
+        self.assertEqual(len(blocks), 1)
+        self.assertIn("\thierarchy Geo", blocks[0])
+
+    def test_emit_skips_when_a_level_is_missing(self):
+        # Only two of three levels exist here -> not this table's hierarchy.
+        ir = {"hierarchies": [
+            {"name": "Geo", "levels": ["Country_Region", "State", "City"]}]}
+        blocks = ET._hierarchies_for_table(["State", "City"], ir, 1)
+        self.assertEqual(blocks, [])
+
+    def test_emit_tolerant_match_caption_vs_column(self):
+        # Tableau caption 'Country/Region' resolves to column 'Country_Region'.
+        ir = {"hierarchies": [
+            {"name": "Geo", "levels": ["Country/Region", "State"]}]}
+        blocks = ET._hierarchies_for_table(["Country_Region", "State"], ir, 1)
+        self.assertEqual(len(blocks), 1)
+        self.assertIn("column: Country_Region", blocks[0])
+
+    def test_sales_workbook_hierarchy_round_trips(self):
+        # End-to-end against the real Sales workbook: the drill-path hierarchy is
+        # captured in the IR (no longer silently dropped).
+        if not os.path.isfile(SALES_TWB):
+            self.skipTest("Sales workbook fixture not present")
+        ir = P.build_ir(SALES_TWB)
+        hiers = ir.get("hierarchies") or []
+        self.assertTrue(hiers, "Sales drill-path hierarchy must be captured")
+        self.assertTrue(all(len(h.get("levels") or []) >= 2 for h in hiers))
+
+
+class TestCategoryBinding(unittest.TestCase):
+    """A chart category must bind to the worksheet's real dimension, never the
+    fact key ('Order ID') just because the parser's categoryField was a measure."""
+
+    DECISIONS = {
+        "tables": [
+            {"name": "Orders", "role": "fact", "sourceDatasource": None,
+             "keyColumns": ["Order ID", "Sales"]},
+            {"name": "Products", "role": "dim", "sourceDatasource": None,
+             "keyColumns": ["Sub-Category", "Category"]},
+            {"name": "Customers", "role": "dim", "sourceDatasource": None,
+             "keyColumns": ["Customer_Name", "Customer_ID"]},
+        ],
+        "measures": [{"name": "KPI CY Less PY"}, {"name": "CY Sales"},
+                     {"name": "Nr of Orders per Customers"}, {"name": "CY Customers"}],
+        "calculatedColumns": [],
+    }
+    IR = {"columns": [{"name": "Order ID", "dataType": "string",
+                       "role": "dimension"}], "worksheets": []}
+
+    def _bind(self, ws):
+        return PBB.category_binding(ws, "Orders", {"Order ID", "Sales"},
+                                    self.IR, self.DECISIONS)
+
+    def test_measure_categoryfield_recovers_dimension_from_rows(self):
+        ws = {"categoryField": "KPI CY Less PY",
+              "rows": ["Sub-Category", "KPI CY Less PY"], "cols": ["CY Sales"]}
+        b = self._bind(ws)
+        self.assertEqual(b["entity"], "Products")
+        self.assertEqual(b["prop"], "Sub-Category")
+
+    def test_tolerant_match_emits_real_model_column_name(self):
+        # IR pill 'Customer Name' (space) -> model column 'Customer_Name' (underscore).
+        ws = {"categoryField": "Customer Name", "rows": ["Customer Name"], "cols": []}
+        b = self._bind(ws)
+        self.assertEqual(b["entity"], "Customers")
+        self.assertEqual(b["prop"], "Customer_Name")
+
+    def test_all_measure_shelves_fall_back_not_crash(self):
+        # No real dimension on rows/cols -> last-ditch first_dim_col (Order ID).
+        ws = {"categoryField": "CY Sales", "rows": ["CY Sales"],
+              "cols": ["Nr of Orders per Customers"]}
+        b = self._bind(ws)
+        self.assertEqual(b["prop"], "Order ID")
+
+    def test_real_dim_categoryfield_binds_directly(self):
+        ws = {"categoryField": "Sub-Category", "rows": ["Sub-Category"], "cols": []}
+        b = self._bind(ws)
+        self.assertEqual(b["entity"], "Products")
+        self.assertEqual(b["prop"], "Sub-Category")
+
+    def test_resolve_model_column_prefers_dim_over_fact_duplicate(self):
+        # Regression: a fact that carries a denormalised 'Customer Name' (space)
+        # copy AND a dim that owns the canonical 'Customer_Name' (underscore) both
+        # normalise to the same key. The resolver must DETERMINISTICALLY return the
+        # dimension's column (what emit_tmdl actually emits), never the fact's
+        # phantom space-spelled duplicate -- which the model dropped, so binding to
+        # it fails validate:bindings (and the winner flipped per run under hash
+        # randomisation of the raw column set).
+        decisions = {
+            "tables": [
+                {"name": "Orders", "role": "fact", "sourceDatasource": None,
+                 "keyColumns": ["Customer Name"]},
+                {"name": "Customers", "role": "dim", "sourceDatasource": None,
+                 "keyColumns": ["Customer_Name"]},
+            ],
+            "calculatedColumns": [],
+        }
+        rc = PBB._resolve_model_column(
+            "Customer Name", {"Customer Name", "Customer_Name"},
+            {"columns": []}, decisions)
+        self.assertEqual(rc, "Customer_Name")
+
+    def test_category_binds_dim_not_fact_phantom(self):
+        # End-to-end of the above through category_binding: the 'Top Customers'
+        # worksheet (categoryField 'Measure Names', dimension on the rows shelf)
+        # must bind to Customers.'Customer_Name', never Orders.'Customer Name'.
+        decisions = {
+            "tables": [
+                {"name": "Orders", "role": "fact", "sourceDatasource": None,
+                 "keyColumns": ["Order ID", "Sales", "Customer Name"]},
+                {"name": "Customers", "role": "dim", "sourceDatasource": None,
+                 "keyColumns": ["Customer_ID", "Customer_Name"]},
+            ],
+            "measures": [{"name": "CY Orders"}],
+            "calculatedColumns": [],
+        }
+        ws = {"categoryField": "Measure Names",
+              "rows": ["Calculation", "Customer Name", "Order Date"],
+              "cols": ["Measure Names"]}
+        b = PBB.category_binding(
+            ws, "Orders",
+            {"Order ID", "Sales", "Customer Name", "Customer_Name"},
+            {"columns": [], "worksheets": []}, decisions)
+        self.assertEqual(b["entity"], "Customers")
+        self.assertEqual(b["prop"], "Customer_Name")
+
+    def test_calc_column_on_dim_binds_as_category_axis(self):
+        # A per-customer LOD count authored as a CALCULATED COLUMN on Customers
+        # (the Tableau '{FIXED [Customer]: COUNTD([Order Id])}' histogram bin field,
+        # role=dimension) must bind on its declared dim table -- NOT the fact -- so
+        # the distribution chart can put it on the category axis. Before the fix
+        # entity_for_field only saw physical CSV columns, so a dim calc column
+        # mis-resolved to Orders and validate:bindings failed.
+        decisions = {
+            "tables": [
+                {"name": "Orders", "role": "fact", "sourceDatasource": None,
+                 "keyColumns": ["Order ID", "Sales"]},
+                {"name": "Customers", "role": "dim", "sourceDatasource": None,
+                 "keyColumns": ["Customer_ID"]},
+            ],
+            "measures": [{"name": "CY Customers"}],
+            "calculatedColumns": [
+                {"table": "Customers", "name": "Nr of Orders per Customers",
+                 "dax": "CALCULATE(DISTINCTCOUNT(Orders[Order ID]))"},
+            ],
+        }
+        ws = {"categoryField": "Nr of Orders per Customers",
+              "rows": ["CY Customers"], "cols": ["Nr of Orders per Customers"]}
+        b = PBB.category_binding(ws, "Orders", {"Order ID", "Sales"},
+                                 {"columns": [], "worksheets": []}, decisions)
+        self.assertEqual(b["entity"], "Customers")
+        self.assertEqual(b["prop"], "Nr of Orders per Customers")
+
+    def test_entity_for_field_resolves_dim_calc_column(self):
+        decisions = {
+            "tables": [
+                {"name": "Orders", "role": "fact", "sourceDatasource": None,
+                 "keyColumns": ["Order ID"]},
+                {"name": "Customers", "role": "dim", "sourceDatasource": None,
+                 "keyColumns": ["Customer_ID"]},
+            ],
+            "calculatedColumns": [
+                {"table": "Customers", "name": "Nr of Orders per Customers"},
+            ],
+        }
+        ent = PBB.entity_for_field("Nr of Orders per Customers", "Orders",
+                                   decisions, {"columns": []})
+        self.assertEqual(ent, "Customers")
+
+
+class TestKpiCardValue(unittest.TestCase):
+    """A KPI card's headline must be the metric, never the year-selector parameter
+    echo ('Current Year' = SELECTEDVALUE of the year slicer, which returns 2023)."""
+
+    DECISIONS = {
+        "tables": [
+            {"name": "Orders", "role": "fact"},
+            {"name": "Select Year", "role": "param"},
+        ],
+        "measures": [
+            {"name": "Current Year",
+             "dax": "SELECTEDVALUE('Select Year'[Select Year], 2023)"},
+            {"name": "Previous Year",
+             "dax": "SELECTEDVALUE('Select Year'[Select Year], 2023) - 1"},
+            {"name": "Select Year Value",
+             "dax": "SELECTEDVALUE('Select Year'[Select Year], 2023)"},
+            {"name": "CY Sales",
+             "dax": "CALCULATE(SUM(Orders[Sales]), Orders[Year] = [Select Year Value])"},
+            {"name": "PY Sales",
+             "dax": "CALCULATE(SUM(Orders[Sales]), Orders[Year] = [Select Year Value] - 1)"},
+            {"name": "% Diff Sales", "dax": "DIVIDE([CY Sales]-[PY Sales],[PY Sales])"},
+            {"name": "Min/Max Sales", "dax": "MIN([CY Sales])"},
+        ],
+        "calculatedColumns": [],
+    }
+
+    def test_parameter_echo_detection(self):
+        echo = PBB.parameter_echo_measures(self.DECISIONS)
+        self.assertIn("Current Year", echo)
+        self.assertIn("Previous Year", echo)
+        self.assertIn("Select Year Value", echo)
+        # Real aggregating metrics are never flagged as echoes.
+        self.assertNotIn("CY Sales", echo)
+        self.assertNotIn("% Diff Sales", echo)
+        self.assertNotIn("Min/Max Sales", echo)
+
+    def test_kpi_card_picks_metric_not_year(self):
+        ws = {"valueField": "Current Year",
+              "values": ["Current Year", "Previous Year", "PY Sales",
+                         "CY Sales", "% Diff Sales", "Min/Max Sales"]}
+        mset = {m["name"] for m in self.DECISIONS["measures"]}
+        echo = PBB.parameter_echo_measures(self.DECISIONS)
+        m = PBB.kpi_value_measure(ws, "KPI Sales", mset, echo, self.DECISIONS)
+        self.assertEqual(m, "CY Sales")
+
+    def test_kpi_card_per_customer_sheet(self):
+        ws = {"valueField": "Current Year",
+              "values": ["Current Year", "CY Sales per Customer",
+                         "PY Sales per Customer", "% Diff"]}
+        mset = {"Current Year", "CY Sales per Customer",
+                "PY Sales per Customer", "% Diff"}
+        echo = {"Current Year"}
+        m = PBB.kpi_value_measure(ws, "KPI Sales Per Customers", mset, echo, self.DECISIONS)
+        self.assertEqual(m, "CY Sales per Customer")
+
+
+class TestScreenshotOverlay(unittest.TestCase):
+    """The screenshot (vision) layer overlays visual INTENT onto the deterministic
+    decisions by precedence — one decision per worksheet, never a duplicate."""
+
+    IR = {"worksheets": [{"name": "KPI Sales"}, {"name": "Customer Distribution"}]}
+
+    def test_dashboard_from_filename(self):
+        self.assertEqual(SO._dashboard_from_filename("SalesDashboard_Close filter.png"),
+                         "SalesDashboard")
+        self.assertEqual(SO._dashboard_from_filename("Sales Dashboard_Open filter.png"),
+                         "Sales Dashboard")
+        self.assertEqual(SO._dashboard_from_filename("Customer Dashboard_Close filter.png"),
+                         "Customer Dashboard")
+
+    def test_hint_upgrades_type_and_logs_discrepancy(self):
+        vds = [{"worksheet": "KPI Sales", "visualType": "card", "reason": "x"}]
+        hints = [{"worksheet": "KPI Sales", "visualType": "kpiStack", "note": "tile"}]
+        merged, disc = SO.apply_visual_hints(vds, hints, self.IR)
+        self.assertEqual(len(merged), 1)  # no duplicate visual
+        self.assertEqual(merged[0]["visualType"], "kpiStack")
+        self.assertEqual(len(disc), 1)
+        self.assertEqual((disc[0]["from"], disc[0]["to"]), ("card", "kpiStack"))
+
+    def test_no_hints_is_noop(self):
+        vds = [{"worksheet": "KPI Sales", "visualType": "card"}]
+        merged, disc = SO.apply_visual_hints(vds, None, self.IR)
+        self.assertEqual([d["visualType"] for d in merged], ["card"])
+        self.assertEqual(disc, [])
+
+    def test_unknown_worksheet_hint_skipped(self):
+        vds = [{"worksheet": "KPI Sales", "visualType": "card"}]
+        hints = [{"worksheet": "Ghost Sheet", "visualType": "kpiStack"}]
+        merged, disc = SO.apply_visual_hints(vds, hints, self.IR)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["visualType"], "card")
+        self.assertTrue(any(d.get("note") == "hint worksheet not in workbook" for d in disc))
+
+    def test_hint_for_undecided_worksheet_appends_single(self):
+        merged, _ = SO.apply_visual_hints(
+            [], [{"worksheet": "Customer Distribution", "visualType": "barChart"}], self.IR)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["visualType"], "barChart")
+
+
+class TestKpiTileDecision(unittest.TestCase):
+    """A 'kpiStack' decision is enriched into a rich tile (CY headline + PY +
+    %Diff + sparkline) from the worksheet's CY/PY measures and date grain."""
+
+    def test_builds_kpistack_from_cy_py(self):
+        ws = {"name": "KPI Sales", "categoryDateLevel": "month",
+              "categoryField": "Order Date",
+              "title": "Total Sales\n{value}\n{value}  vs. PY",
+              "measures": [{"field": "Current Year"}, {"field": "CY Sales"},
+                           {"field": "PY Sales"}, {"field": "% Diff Sales"}]}
+        mset = {"CY Sales", "PY Sales", "% Diff Sales", "Current Year"}
+        vd = EP._kpi_tile_decision(ws, mset)
+        self.assertIsNotNone(vd)
+        self.assertTrue(vd["kpiStack"])
+        self.assertEqual(vd["kpiMeasure"], "CY Sales")
+        self.assertEqual(vd["secondaryValue"], "PY Sales")
+        self.assertEqual(vd["kpiPctMeasure"], "% Diff Sales")
+
+    def test_returns_none_without_date_grain(self):
+        ws = {"name": "X", "measures": [{"field": "CY Sales"}, {"field": "PY Sales"}]}
+        self.assertIsNone(EP._kpi_tile_decision(ws, {"CY Sales", "PY Sales"}))
 
 
 if __name__ == "__main__":

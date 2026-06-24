@@ -177,9 +177,22 @@ def pill_agg_binding(ws: Optional[Dict], entity: str, cols: Set[str],
     if not pills:
         return None
     p = pills[0]
-    col = p.get("column") or p.get("field")
     func = agg_func(p.get("agg"))
-    if not col or col not in cols or func is None:
+    if func is None:
+        return None
+    # The Tableau pill carries an internal ``column`` alias (e.g.
+    # 'CY Sales (copy)_3221481164532666369') AND the human ``field`` caption
+    # (e.g. 'CY Customers'). Either may name the real model column. Resolve
+    # against BOTH the physical IR columns and the agent-authored calculated
+    # columns — a histogram's customer-count axis is exactly a COUNTD over a
+    # per-row calc column ('CY Customers'), whose internal alias is NOT a real
+    # column, so binding by ``column`` alone silently fails and the value falls
+    # back to a parameter-echo year.
+    calc_cols = {c.get("name") for c in (decisions or {}).get("calculatedColumns", [])
+                 if c.get("name")}
+    col = next((c for c in (p.get("column"), p.get("field"))
+                if c and (c in cols or c in calc_cols)), None)
+    if not col:
         return None
     ent = entity_for_field(col, entity, decisions, ir) if decisions else entity
     return {"entity": ent, "prop": col, "agg": func,
@@ -365,6 +378,14 @@ def entity_for_field(field: Optional[str], default_entity: str,
     for table in decisions.get("tables", []):
         if table.get("role") in ("dim", "date") and field in _owned_columns(table, ir):
             return table["name"]
+    # A calculated column lives on its declared table, which may be a DIM (e.g. a
+    # per-customer 'Nr of Orders per Customers' = CALCULATE(DISTINCTCOUNT(...)) on
+    # Customers, used as a histogram bin axis). _owned_columns only sees physical
+    # CSV columns, so without this a dim calc column would mis-resolve to the fact
+    # and the binding would reference a column that does not exist on that table.
+    for c in decisions.get("calculatedColumns", []) or []:
+        if base_field(c.get("name") or "") == field:
+            return c.get("table") or default_entity
     return default_entity
 
 
@@ -421,7 +442,7 @@ def resolve_slicer(zone: Dict, ir: Dict, decisions: Dict):
         dcol = first_date_col(ir)
         if dcol:
             return entity, dcol, title, "Dropdown"
-    fallback = field if field in cols else (next(iter(cols)) if cols else "Column")
+    fallback = field if field in cols else (sorted(cols)[0] if cols else "Column")
     return entity, fallback, title, "Dropdown"
 
 
@@ -433,6 +454,79 @@ def _is_date_param(field: Optional[str], decisions: Dict) -> bool:
     if field in names or slug(field) in {slug(n) for n in names}:
         return False  # it's a list parameter -> dropdown
     return bool(re.search(r"\bdate\b", field, re.IGNORECASE))
+
+
+def _measure_names(decisions: Optional[Dict]) -> Set[str]:
+    return {m.get("name") for m in (decisions or {}).get("measures", []) if m.get("name")}
+
+
+def _norm_col(name: Optional[str]) -> str:
+    """Normalise a field name for tolerant column matching (space/_/-/​/ vary
+    between the Tableau caption and the emitted CSV-header column name, e.g.
+    'Customer Name' vs the model column 'Customer_Name')."""
+    return re.sub(r"[\s_/\-]", "", name or "").lower()
+
+
+def _resolve_model_column(field: Optional[str], cols: Set[str], ir: Dict,
+                          decisions: Optional[Dict]) -> Optional[str]:
+    """Resolve a Tableau field to the ACTUAL emitted model column name, matched
+    tolerantly. Returns the real column name (so the binding references a column
+    that exists) when ``field`` is a physical/calculated column on the bound fact
+    or any dim/date table; otherwise None (measures, Tableau calc pills, etc.).
+
+    Resolution is scoped to the columns the model ACTUALLY emits -- each table's
+    own physical CSV via ``_owned_columns`` -- so a binding never references a
+    phantom IR column that emit_tmdl normalised away (e.g. a fact's denormalised
+    'Customer Name' text copy that the star-schema split dropped from Orders).
+    Dim/date tables are probed BEFORE the fact, so a shared column name resolves
+    to the dimension's canonical column (Customers.'Customer_Name') rather than a
+    fact's duplicate, and the order is fully deterministic (tables in decisions
+    order, columns sorted) -- never dependent on set-iteration / hash-seed order,
+    which previously made the same field bind to a different table per run.
+    The raw model-wide ``cols`` set is only a last resort, reached when no model
+    table owns the field (e.g. a single-flat source with no decisions tables)."""
+    if not field:
+        return None
+    nf = _norm_col(base_field(field))
+    if decisions:
+        tables = decisions.get("tables", [])
+        # Dim/date first, then fact/other (params never own bindable columns).
+        dim_first = ([t for t in tables if t.get("role") in ("dim", "date")] +
+                     [t for t in tables if t.get("role") not in ("dim", "date", "param")])
+        for table in dim_first:
+            for c in sorted(_owned_columns(table, ir)):
+                if _norm_col(c) == nf:
+                    return c
+        for c in decisions.get("calculatedColumns", []) or []:
+            if _norm_col(c.get("name")) == nf:
+                return c.get("name")
+    for c in sorted(cols):
+        if _norm_col(c) == nf:
+            return c
+    return None
+
+
+def _first_real_ws_dimension(ws: Optional[Dict], cols: Set[str], ir: Dict,
+                             decisions: Optional[Dict]) -> Optional[str]:
+    """Recover a chart's genuine categorical axis from the worksheet's own row/col
+    shelves: the first pill that is not a measure and resolves to a real model
+    column, returned as the emitted column name. Detail/tooltip pills (the
+    ``dimensions`` list) are deliberately NOT scanned — they are not the plotted
+    axis. This is the fallback when the parser's ``categoryField`` is a measure or
+    a Tableau calc (e.g. 'KPI CY Less PY'), so the binder never collapses to the
+    model's first string column — a fact key like 'Order ID' that would plot
+    thousands of meaningless bars instead of Sub-Category / Customer Name."""
+    if not ws or not decisions:
+        return None
+    mset = _measure_names(decisions)
+    for shelf in ("rows", "cols"):
+        for f in ws.get(shelf) or []:
+            if not isinstance(f, str) or base_field(f) in mset:
+                continue
+            rc = _resolve_model_column(f, cols, ir, decisions)
+            if rc:
+                return rc
+    return None
 
 
 def category_binding(ws: Optional[Dict], entity: str, cols: Set[str],
@@ -451,6 +545,15 @@ def category_binding(ws: Optional[Dict], entity: str, cols: Set[str],
         return {"entity": entity, "prop": prop}
     if catf and catf in cols:
         return {"entity": _ent(catf), "prop": catf}
+    # categoryField is a real column on a DIM/DATE table (not just the fact) and
+    # is not a measure -> bind to the actual model column. The old check only
+    # looked at the fact's own columns, so every cross-table category dimension
+    # (Sub-Category on a Product dim, Customer Name on a Customer dim) silently
+    # fell through to the 'Order ID' fallback below.
+    if catf and catf not in _measure_names(decisions):
+        rc = _resolve_model_column(catf, cols, ir, decisions)
+        if rc:
+            return {"entity": _ent(rc), "prop": rc}
     # Date-level category whose field name is a Tableau date-part pseudonym (e.g.
     # 'Year' for YEAR([date_added])) rather than a real column. Bind to the derived
     # date-part column of the worksheet's date dimension, which emit_tmdl emits via
@@ -461,9 +564,74 @@ def category_binding(ws: Optional[Dict], entity: str, cols: Set[str],
             if ws else None
         if dcol:
             return {"entity": entity, "prop": D.part_column_name(dcol, level)}
+    # The parser's categoryField was a measure/calc (e.g. 'KPI CY Less PY'):
+    # recover the genuine axis from the worksheet's row/col shelves before the
+    # last-ditch model-wide fallback (which lands on a fact key like 'Order ID').
+    ws_dim = _first_real_ws_dimension(ws, cols, ir, decisions)
+    if ws_dim:
+        return {"entity": _ent(ws_dim), "prop": ws_dim}
     dim = first_dim_col(ir)
     return {"entity": _ent(dim) if dim else entity,
-            "prop": dim or (next(iter(cols)) if cols else "Column")}
+            "prop": dim or (sorted(cols)[0] if cols else "Column")}
+
+
+# Aggregation / iterator functions that mark a measure as a real metric (not a
+# bare parameter echo). CALCULATE/DIVIDE wrap real arithmetic too.
+_AGG_RE = re.compile(
+    r"\b(SUM|SUMX|COUNT|COUNTROWS|COUNTAX?|COUNTX|DISTINCTCOUNT|AVERAGEX?|"
+    r"MINX?|MAXX?|MEDIAN|CALCULATE|DIVIDE|TOTALYTD|TOTALQTD|TOTALMTD|RANKX|"
+    r"PRODUCTX?|VARX?|STDEVX?|CONCATENATEX)\b", re.IGNORECASE)
+
+
+def parameter_echo_measures(decisions: Optional[Dict]) -> Set[str]:
+    """Measures whose DAX merely echoes a disconnected parameter / slicer value
+    (e.g. 'Current Year' = ``SELECTEDVALUE('Select Year'[Select Year], 2023)``,
+    'Previous Year' = the same ``- 1``). They return a constant scalar — the
+    selected YEAR, not a metric — so they must never be a card's headline number
+    nor a plotted chart series, where they would render a flat '2023' bar."""
+    params = {t.get("name") for t in (decisions or {}).get("tables", [])
+              if t.get("role") == "param"}
+    echo: Set[str] = set()
+    for m in (decisions or {}).get("measures", []):
+        dax = m.get("dax") or ""
+        up = dax.upper()
+        if "SELECTEDVALUE" in up and not _AGG_RE.search(dax):
+            if not params or any(p and p.upper() in up for p in params):
+                echo.add(m.get("name"))
+    return echo
+
+
+def kpi_value_measure(ws: Optional[Dict], ws_name: Optional[str], mset: Set[str],
+                      echo: Set[str], decisions: Optional[Dict] = None) -> Optional[str]:
+    """Pick a KPI/card's headline metric from the worksheet's own value pills.
+
+    Excludes parameter echoes ('Current Year') and de-prioritises the prior-year
+    ('PY …'), percent-difference ('% Diff …') and sparkline-bound ('Min/Max …')
+    helper measures, preferring the current-period metric whose name matches the
+    sheet (e.g. 'KPI Sales' -> 'CY Sales', not the year selector 'Current Year')."""
+    if not ws:
+        return None
+    cands = [v for v in (ws.get("values") or [])
+             if v in mset and v not in echo]
+    if not cands:
+        return None
+    name_toks = set(re.findall(r"[a-z]+", (ws_name or "").lower())) - {"kpi"}
+
+    def score(m: str) -> int:
+        ml = m.lower()
+        toks = set(re.findall(r"[a-z]+", ml))
+        s = 3 if (name_toks & toks) else 0
+        if ml.startswith("cy ") or "current" in ml or ml.startswith("total "):
+            s += 2
+        if ml.startswith("py ") or "previous" in ml or "prior" in ml:
+            s -= 3
+        if "%" in m or "diff" in ml or "pct" in ml:
+            s -= 3
+        if "min/max" in ml or "max/min" in ml or ml.startswith(("min ", "max ")):
+            s -= 3
+        return s
+
+    return max(cands, key=lambda m: (score(m), -cands.index(m)))
 
 
 def _col_role(ir: Dict, name: Optional[str]) -> Optional[str]:
@@ -487,7 +655,7 @@ def value_binding(valf: Optional[str], entity: str, mset: Set[str],
         return {"entity": entity, "prop": chosen, "isMeasure": True}
     if valf and valf in cols:
         return {"entity": entity, "prop": valf, "isMeasure": False}
-    col = next(iter(cols)) if cols else "Value"
+    col = sorted(cols)[0] if cols else "Value"
     return {"entity": entity, "prop": col, "isMeasure": False}
 
 
@@ -547,12 +715,40 @@ def table_columns(ws: Optional[Dict], ir: Dict, entity: str,
     out: List[Dict] = []
     dcols = date_cols(ir)
     level = ws.get("categoryDateLevel") if ws else None
+    # Calculated columns (e.g. Orders[Customer Name] = RELATED(...)) are real,
+    # displayable model columns but live in decisions.calculatedColumns rather than
+    # the physical IR columns, so they are absent from ``cols``. Map name -> owning
+    # table so a ranked detail table can still show its dimension column.
+    calc_map = {c.get("name"): c.get("table")
+                for c in (decisions or {}).get("calculatedColumns", [])
+                if c.get("name")}
 
     def _ent(prop: str) -> str:
         return entity_for_field(prop, entity, decisions, ir) if decisions else entity
 
     if ws:
         dims = list(ws.get("dimensions") or [])
+        # Filter-shelf fields are NOT table columns -- Tableau shows them only as
+        # filter controls, never as displayed columns. The IR keeps them in the
+        # flat ``dimensions`` list alongside the real row/detail dimensions, so a
+        # ranked detail table (e.g. 'Top Customers') would otherwise gain spurious
+        # Category/City/Region/State/Sub-Category columns instead of just the
+        # ranked dimension (Customer Name). Drop anything on the filters shelf --
+        # but NOT a field that is ALSO on the rows shelf, because a single Tableau
+        # field can both filter AND display (Customer Name is on filters AND rows);
+        # dropping it would strip the table's one real dimension column.
+        rows_set = {d for d in (ws.get("rows") or []) if isinstance(d, str)}
+        filt = set(ws.get("filters") or []) - rows_set
+        # Aggregated pills (MAX(Order Date), SUM(Sales), ...) are measures, never
+        # grouping dimensions -- listing one as a dimension column would split the
+        # table to one row per distinct value and break the per-row grain.
+        agg_fields = {m.get("field") for m in (ws.get("measures") or [])
+                      if m.get("agg") and m.get("field")}
+        drop = filt | agg_fields
+        if drop:
+            dims = [d for d in dims if d not in drop]
+
+
         # A Tableau text-table mark (no rows/cols/values shelves, only a Text pill)
         # renders ONE column: the distinct values of the text-encoded dimension. The
         # other entries in `dimensions` are Detail/Tooltip pills Tableau does not show
@@ -570,9 +766,19 @@ def table_columns(ws: Optional[Dict], ir: Dict, entity: str,
                             "isMeasure": False})
             elif d in cols:
                 out.append({"entity": _ent(d), "prop": d, "isMeasure": False})
+            elif d in calc_map:
+                out.append({"entity": calc_map[d] or _ent(d), "prop": d,
+                            "isMeasure": False})
         for v in ws.get("values", []) or []:
             if v in mset:
                 out.append({"entity": entity, "prop": v, "isMeasure": True})
+            elif v in agg_fields:
+                # An aggregated pill that is not a named model measure (e.g.
+                # MAX(Order Date) for 'Last Order') cannot be emitted as an inline
+                # table aggregation, and binding the raw column instead would split
+                # the table to one row per value. Skip it rather than corrupt the
+                # per-row grain; an explicit decision/tableColumns can add it back.
+                continue
             elif v in cols:
                 out.append({"entity": _ent(v), "prop": v, "isMeasure": False})
     if not out:

@@ -36,6 +36,31 @@ def quote(name: str) -> str:
     return name
 
 
+def safe_format_string(fmt: Optional[str]) -> Optional[str]:
+    """Make a TMDL formatString safe for Power BI Desktop to load.
+
+    A formatString value that STARTS with a double quote makes the TMDL parser
+    treat the whole value as a quoted string (requiring every internal quote to
+    be doubled). Power BI Desktop then rejects it with
+    ``InvalidValueFormat ... un-escaped quote marker`` — and the static
+    ``tmdl-validate`` linter does NOT catch this. Convert a leading quoted
+    literal (e.g. the ``"$"`` in ``"$"#,##0.00``) into backslash-escaped
+    characters (``\\$#,##0.00``) — Power BI renders both identically. Mid-string
+    quotes (e.g. ``#,##0,"K"``) are valid and left untouched.
+    """
+    if not fmt or not isinstance(fmt, str) or not fmt.startswith('"'):
+        return fmt
+    end = fmt.find('"', 1)
+    if end == -1:
+        # Malformed unterminated leading quote — drop it defensively so the value
+        # never starts with a quote marker.
+        return fmt[1:]
+    literal = fmt[1:end]
+    rest = fmt[end + 1:]
+    escaped = "".join("\\" + c for c in literal)
+    return escaped + rest
+
+
 def lineage(seq: int) -> str:
     """Deterministic lineage tag from a sequence number."""
     return f"a1000000-0000-4000-9000-{seq:012x}"
@@ -54,7 +79,7 @@ def column_block(col: Dict, seq: int) -> str:
         fmt = fmt or "#,0"
     lines.append(f"{TAB}{TAB}lineageTag: {lineage(seq)}")
     if fmt:
-        lines.insert(2, f"{TAB}{TAB}formatString: {fmt}")
+        lines.insert(2, f"{TAB}{TAB}formatString: {safe_format_string(fmt)}")
     lines.append(f"{TAB}{TAB}summarizeBy: {summarize}")
     lines.append(f"{TAB}{TAB}sourceColumn: {name}")
     lines.append("")
@@ -63,6 +88,29 @@ def column_block(col: Dict, seq: int) -> str:
         lines.append("")
         lines.append(f"{TAB}{TAB}annotation UnderlyingDateTimeDataType = Date")
     return "\n".join(lines)
+
+
+def hierarchy_block(name: str, levels: List[Tuple[str, str]], seq: int) -> str:
+    """Build a TMDL hierarchy block from ordered (levelName, columnName) pairs.
+
+    Hierarchies live at the table level (one tab in), with each ``level`` nested
+    a further tab and pointing at a real column on the SAME table via ``column:``.
+    Power BI Desktop rejects a hierarchy whose level references a missing column,
+    so the caller must only pass levels that resolve to actual table columns.
+    """
+    lines = [
+        f"{TAB}hierarchy {quote(name)}",
+        f"{TAB}{TAB}lineageTag: {lineage(seq)}",
+        "",
+    ]
+    for i, (level_name, column_name) in enumerate(levels):
+        lines += [
+            f"{TAB}{TAB}level {quote(level_name)}",
+            f"{TAB}{TAB}{TAB}lineageTag: {lineage(seq * 16 + i + 1)}",
+            f"{TAB}{TAB}{TAB}column: {quote(column_name)}",
+            "",
+        ]
+    return "\n".join(lines).rstrip()
 
 
 def calc_column_block(name: str, dax: str, data_type: str,
@@ -84,7 +132,7 @@ def calc_column_block(name: str, dax: str, data_type: str,
         lines = [f"{TAB}column {quote(name)} = {dax}"]
     lines.append(f"{TAB}{TAB}dataType: {tmdl_type}")
     if fmt:
-        lines.append(f"{TAB}{TAB}formatString: {fmt}")
+        lines.append(f"{TAB}{TAB}formatString: {safe_format_string(fmt)}")
     lines.append(f"{TAB}{TAB}lineageTag: {lineage(seq)}")
     lines.append(f"{TAB}{TAB}summarizeBy: none")
     lines.append("")
@@ -108,7 +156,7 @@ def measure_block(m: Dict, seq: int) -> str:
     else:
         lines.append(f"{TAB}measure {quote(m['name'])} = {dax}")
     if m.get("formatString"):
-        lines.append(f"{TAB}{TAB}formatString: {m['formatString']}")
+        lines.append(f"{TAB}{TAB}formatString: {safe_format_string(m['formatString'])}")
     if m.get("displayFolder"):
         lines.append(f"{TAB}{TAB}displayFolder: {m['displayFolder']}")
     lines.append(f"{TAB}{TAB}lineageTag: {lineage(seq)}")
