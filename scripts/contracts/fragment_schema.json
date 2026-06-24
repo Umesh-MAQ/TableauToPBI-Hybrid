@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Decisions Fragment",
+  "description": "A partial slice of decisions.json. Both the deterministic side (star_det schema) and the agent gap-fill (agent-fragment.json) emit this shape; merge_decisions.py assembles fragments into the final decisions.json. Field names mirror decisions_schema.json exactly so merging is a structural concatenation, not a translation.",
+  "type": "object",
+  "properties": {
+    "tableStrategy": { "type": "string", "enum": ["single-flat", "star-schema"] },
+    "tables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "role"],
+        "properties": {
+          "name": { "type": "string" },
+          "role": { "type": "string", "enum": ["fact", "dim", "param", "date"] },
+          "sourceType": { "type": "string", "enum": ["csv", "excel", "sql", "datatable", "calendar"] },
+          "sourceFile": { "type": ["string", "null"] },
+          "sourceDatasource": { "type": ["string", "null"] },
+          "keyColumns": { "type": "array", "items": { "type": "string" } },
+          "dedupKey": { "type": ["string", "null"] },
+          "datatable": { "type": ["object", "null"] }
+        }
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fromColumn", "toColumn"],
+        "properties": {
+          "fromColumn": { "type": "string" },
+          "toColumn": { "type": "string" },
+          "crossFilter": { "type": "string", "enum": ["single", "both"] },
+          "active": { "type": "boolean" }
+        }
+      }
+    },
+    "measures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["table", "name", "dax"],
+        "properties": {
+          "table": { "type": "string" },
+          "name": { "type": "string" },
+          "dax": { "type": "string" },
+          "formatString": { "type": ["string", "null"] },
+          "displayFolder": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] },
+          "source": { "type": "string", "enum": ["template", "llm", "deterministic"] }
+        }
+      }
+    },
+    "calculatedColumns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["table", "name", "dax"],
+        "properties": {
+          "table": { "type": "string" },
+          "name": { "type": "string" },
+          "dax": { "type": "string" },
+          "dataType": { "type": ["string", "null"] },
+          "formatString": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "visualDecisions": {
+      "type": "array",
+      "description": "Resolve each ambiguous worksheet (IR inferredVisualType == null) to a Power BI visualType. Carried verbatim into decisions.json and consumed by emit_pbir.",
+      "items": {
+        "type": "object",
+        "required": ["worksheet", "visualType"],
+        "properties": {
+          "worksheet": { "type": "string" },
+          "visualType": { "type": "string", "description": "barChart, columnChart, lineChart, areaChart, pieChart, donutChart, scatterChart, treemap, map, tableEx, pivotTable, card, multiRowCard, slicer, gauge, kpi, funnel, waterfallChart, ribbonChart" },
+          "reason": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "fieldParameters": {
+      "type": "array",
+      "description": "Optional Power BI field parameters that reproduce Tableau parameter-driven axis/measure swaps (e.g. Monthly/Daily, Bar/Table toggles).",
+      "items": {
+        "type": "object",
+        "required": ["name", "fields"],
+        "properties": {
+          "name": { "type": "string" },
+          "appliesTo": { "type": "array", "items": { "type": "string" } },
+          "axis": { "type": "string", "enum": ["category", "value"] },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["label", "table", "column"],
+              "properties": {
+                "label": { "type": "string" },
+                "table": { "type": "string" },
+                "column": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

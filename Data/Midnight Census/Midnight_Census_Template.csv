@@ -1,0 +1,201 @@
+DEPARTMENT_KEY,Encounter CSN,Parent Hospital,Hospital,Unit,Patient Class,Census Date,Census Count,Census Count Adults,Census Count Peds
+1011,500001,Nash,UNC Nash,PICU,Emergency,1/29/2026,1,0,1
+1002,500002,Med Center,UNC Medical Center,NICU,Inpatient,5/20/2026,1,0,1
+1004,500003,Rex,UNC Rex Hospital,ICU,Emergency,5/10/2026,1,1,0
+1009,500004,Nash,UNC Nash,Emergency,Emergency,4/18/2026,1,1,0
+1007,500005,Johnston,UNC Johnston,Medical/Surgical,Observation,3/29/2026,1,1,0
+1002,500006,Med Center,UNC Medical Center,NICU,Emergency,4/2/2026,1,0,1
+1002,500007,Med Center,UNC Medical Center,NICU,Emergency,4/7/2026,1,0,1
+1004,500008,Rex,UNC Rex Hospital,ICU,Inpatient,1/18/2026,1,1,0
+1007,500009,Johnston,UNC Johnston,Medical/Surgical,Inpatient,3/13/2026,1,1,0
+1011,500010,Nash,UNC Nash,PICU,Emergency,3/10/2026,1,0,1
+1012,500011,Chatham,UNC Chatham,Maternity,Emergency,3/4/2026,1,1,0
+1004,500012,Rex,UNC Rex Hospital,ICU,Inpatient,3/25/2026,1,1,0
+1004,500013,Rex,UNC Rex Hospital,ICU,Emergency,5/26/2026,1,1,0
+1008,500014,Johnston,UNC Johnston,Pediatrics,Observation,2/6/2026,1,0,1
+1012,500015,Chatham,UNC Chatham,Maternity,Inpatient,5/30/2026,1,1,0
+1009,500016,Nash,UNC Nash,Emergency,Inpatient,5/7/2026,1,1,0
+1013,500017,Chatham,UNC Chatham,ICU,Emergency,4/19/2026,1,1,0
+1005,500018,Rex,UNC Rex Hospital,Oncology,Emergency,5/22/2026,1,1,0
+1006,500019,Rex,UNC Rex Hospital,Cardiology,Emergency,1/29/2026,1,1,0
+1005,500020,Rex,UNC Rex Hospital,Oncology,Emergency,5/9/2026,1,1,0
+1010,500021,Nash,UNC Nash,Telemetry,Inpatient,2/20/2026,1,1,0
+1010,500022,Nash,UNC Nash,Telemetry,Inpatient,3/24/2026,1,1,0
+1001,500023,Med Center,UNC Medical Center,ICU,Emergency,3/3/2026,1,1,0
+1013,500024,Chatham,UNC Chatham,ICU,Emergency,2/2/2026,1,1,0
+1014,500025,Med Center,UNC Medical Center,Telemetry,Emergency,6/5/2026,1,1,0
+1005,500026,Rex,UNC Rex Hospital,Oncology,Inpatient,4/13/2026,1,1,0
+1004,500027,Rex,UNC Rex Hospital,ICU,Emergency,2/27/2026,1,1,0
+1004,500028,Rex,UNC Rex Hospital,ICU,Observation,1/2/2026,1,1,0
+1002,500029,Med Center,UNC Medical Center,NICU,Emergency,5/12/2026,1,0,1
+1015,500030,Rex,UNC Rex Hospital,Emergency,Inpatient,5/27/2026,1,1,0
+1002,500031,Med Center,UNC Medical Center,NICU,Emergency,1/25/2026,1,0,1
+1001,500032,Med Center,UNC Medical Center,ICU,Inpatient,1/26/2026,1,1,0
+1009,500033,Nash,UNC Nash,Emergency,Inpatient,4/25/2026,1,1,0
+1008,500034,Johnston,UNC Johnston,Pediatrics,Inpatient,5/21/2026,1,0,1
+1007,500035,Johnston,UNC Johnston,Medical/Surgical,Inpatient,5/5/2026,1,1,0
+1007,500036,Johnston,UNC Johnston,Medical/Surgical,Emergency,3/9/2026,1,1,0
+1012,500037,Chatham,UNC Chatham,Maternity,Emergency,5/5/2026,1,1,0
+1009,500038,Nash,UNC Nash,Emergency,Emergency,1/16/2026,1,1,0
+1015,500039,Rex,UNC Rex Hospital,Emergency,Inpatient,5/16/2026,1,1,0
+1010,500040,Nash,UNC Nash,Telemetry,Inpatient,1/18/2026,1,1,0
+1010,500041,Nash,UNC Nash,Telemetry,Emergency,6/2/2026,1,1,0
+1009,500042,Nash,UNC Nash,Emergency,Inpatient,3/22/2026,1,1,0
+1011,500043,Nash,UNC Nash,PICU,Emergency,3/18/2026,1,0,1
+1002,500044,Med Center,UNC Medical Center,NICU,Inpatient,1/19/2026,1,0,1
+1015,500045,Rex,UNC Rex Hospital,Emergency,Emergency,3/4/2026,1,1,0
+1005,500046,Rex,UNC Rex Hospital,Oncology,Observation,6/6/2026,1,1,0
+1015,500047,Rex,UNC Rex Hospital,Emergency,Inpatient,1/27/2026,1,1,0
+1005,500048,Rex,UNC Rex Hospital,Oncology,Observation,3/14/2026,1,1,0
+1009,500049,Nash,UNC Nash,Emergency,Observation,5/6/2026,1,1,0
+1001,500050,Med Center,UNC Medical Center,ICU,Emergency,1/1/2026,1,1,0
+1008,500051,Johnston,UNC Johnston,Pediatrics,Emergency,5/22/2026,1,0,1
+1015,500052,Rex,UNC Rex Hospital,Emergency,Observation,2/8/2026,1,1,0
+1003,500053,Med Center,UNC Medical Center,Emergency,Inpatient,1/11/2026,1,1,0
+1011,500054,Nash,UNC Nash,PICU,Inpatient,1/27/2026,1,0,1
+1015,500055,Rex,UNC Rex Hospital,Emergency,Emergency,3/2/2026,1,1,0
+1015,500056,Rex,UNC Rex Hospital,Emergency,Inpatient,3/27/2026,1,1,0
+1007,500057,Johnston,UNC Johnston,Medical/Surgical,Inpatient,1/10/2026,1,1,0
+1004,500058,Rex,UNC Rex Hospital,ICU,Observation,1/7/2026,1,1,0
+1006,500059,Rex,UNC Rex Hospital,Cardiology,Observation,5/11/2026,1,1,0
+1003,500060,Med Center,UNC Medical Center,Emergency,Emergency,5/29/2026,1,1,0
+1013,500061,Chatham,UNC Chatham,ICU,Inpatient,3/22/2026,1,1,0
+1005,500062,Rex,UNC Rex Hospital,Oncology,Emergency,1/12/2026,1,0,1
+1012,500063,Chatham,UNC Chatham,Maternity,Observation,2/20/2026,1,0,1
+1011,500064,Nash,UNC Nash,PICU,Observation,2/1/2026,1,0,1
+1006,500065,Rex,UNC Rex Hospital,Cardiology,Emergency,4/14/2026,1,1,0
+1007,500066,Johnston,UNC Johnston,Medical/Surgical,Observation,2/14/2026,1,1,0
+1005,500067,Rex,UNC Rex Hospital,Oncology,Observation,2/23/2026,1,1,0
+1008,500068,Johnston,UNC Johnston,Pediatrics,Inpatient,4/24/2026,1,0,1
+1011,500069,Nash,UNC Nash,PICU,Emergency,1/22/2026,1,0,1
+1005,500070,Rex,UNC Rex Hospital,Oncology,Emergency,2/27/2026,1,1,0
+1014,500071,Med Center,UNC Medical Center,Telemetry,Observation,1/19/2026,1,1,0
+1008,500072,Johnston,UNC Johnston,Pediatrics,Inpatient,4/13/2026,1,0,1
+1003,500073,Med Center,UNC Medical Center,Emergency,Observation,5/13/2026,1,1,0
+1003,500074,Med Center,UNC Medical Center,Emergency,Emergency,4/29/2026,1,1,0
+1014,500075,Med Center,UNC Medical Center,Telemetry,Observation,5/10/2026,1,1,0
+1008,500076,Johnston,UNC Johnston,Pediatrics,Inpatient,3/8/2026,1,0,1
+1005,500077,Rex,UNC Rex Hospital,Oncology,Observation,4/23/2026,1,1,0
+1015,500078,Rex,UNC Rex Hospital,Emergency,Inpatient,5/19/2026,1,1,0
+1012,500079,Chatham,UNC Chatham,Maternity,Observation,2/24/2026,1,1,0
+1001,500080,Med Center,UNC Medical Center,ICU,Observation,2/22/2026,1,1,0
+1008,500081,Johnston,UNC Johnston,Pediatrics,Emergency,1/2/2026,1,0,1
+1009,500082,Nash,UNC Nash,Emergency,Inpatient,6/4/2026,1,1,0
+1007,500083,Johnston,UNC Johnston,Medical/Surgical,Inpatient,3/28/2026,1,1,0
+1010,500084,Nash,UNC Nash,Telemetry,Inpatient,5/17/2026,1,1,0
+1002,500085,Med Center,UNC Medical Center,NICU,Observation,4/20/2026,1,0,1
+1006,500086,Rex,UNC Rex Hospital,Cardiology,Observation,2/24/2026,1,1,0
+1014,500087,Med Center,UNC Medical Center,Telemetry,Emergency,1/21/2026,1,1,0
+1002,500088,Med Center,UNC Medical Center,NICU,Inpatient,1/11/2026,1,0,1
+1003,500089,Med Center,UNC Medical Center,Emergency,Observation,5/2/2026,1,1,0
+1013,500090,Chatham,UNC Chatham,ICU,Emergency,4/5/2026,1,1,0
+1001,500091,Med Center,UNC Medical Center,ICU,Inpatient,3/21/2026,1,1,0
+1010,500092,Nash,UNC Nash,Telemetry,Emergency,3/4/2026,1,1,0
+1013,500093,Chatham,UNC Chatham,ICU,Emergency,1/11/2026,1,1,0
+1011,500094,Nash,UNC Nash,PICU,Observation,3/29/2026,1,0,1
+1011,500095,Nash,UNC Nash,PICU,Emergency,4/28/2026,1,0,1
+1005,500096,Rex,UNC Rex Hospital,Oncology,Emergency,6/7/2026,1,1,0
+1005,500097,Rex,UNC Rex Hospital,Oncology,Observation,3/24/2026,1,1,0
+1010,500098,Nash,UNC Nash,Telemetry,Inpatient,6/6/2026,1,1,0
+1008,500099,Johnston,UNC Johnston,Pediatrics,Emergency,2/24/2026,1,0,1
+1015,500100,Rex,UNC Rex Hospital,Emergency,Emergency,3/12/2026,1,1,0
+1007,500101,Johnston,UNC Johnston,Medical/Surgical,Emergency,5/6/2026,1,1,0
+1008,500102,Johnston,UNC Johnston,Pediatrics,Inpatient,4/25/2026,1,0,1
+1005,500103,Rex,UNC Rex Hospital,Oncology,Emergency,5/29/2026,1,1,0
+1009,500104,Nash,UNC Nash,Emergency,Inpatient,3/26/2026,1,1,0
+1002,500105,Med Center,UNC Medical Center,NICU,Inpatient,2/19/2026,1,0,1
+1012,500106,Chatham,UNC Chatham,Maternity,Inpatient,5/4/2026,1,1,0
+1014,500107,Med Center,UNC Medical Center,Telemetry,Emergency,2/19/2026,1,1,0
+1009,500108,Nash,UNC Nash,Emergency,Inpatient,2/2/2026,1,1,0
+1011,500109,Nash,UNC Nash,PICU,Observation,5/6/2026,1,0,1
+1008,500110,Johnston,UNC Johnston,Pediatrics,Observation,3/29/2026,1,0,1
+1008,500111,Johnston,UNC Johnston,Pediatrics,Observation,1/19/2026,1,0,1
+1002,500112,Med Center,UNC Medical Center,NICU,Inpatient,3/5/2026,1,0,1
+1013,500113,Chatham,UNC Chatham,ICU,Observation,5/14/2026,1,1,0
+1005,500114,Rex,UNC Rex Hospital,Oncology,Observation,5/26/2026,1,1,0
+1011,500115,Nash,UNC Nash,PICU,Inpatient,1/21/2026,1,0,1
+1007,500116,Johnston,UNC Johnston,Medical/Surgical,Observation,4/26/2026,1,1,0
+1012,500117,Chatham,UNC Chatham,Maternity,Observation,3/14/2026,1,1,0
+1013,500118,Chatham,UNC Chatham,ICU,Inpatient,5/31/2026,1,1,0
+1011,500119,Nash,UNC Nash,PICU,Observation,2/8/2026,1,0,1
+1010,500120,Nash,UNC Nash,Telemetry,Emergency,5/26/2026,1,1,0
+1007,500121,Johnston,UNC Johnston,Medical/Surgical,Inpatient,3/11/2026,1,1,0
+1015,500122,Rex,UNC Rex Hospital,Emergency,Emergency,4/21/2026,1,1,0
+1014,500123,Med Center,UNC Medical Center,Telemetry,Observation,5/28/2026,1,1,0
+1009,500124,Nash,UNC Nash,Emergency,Inpatient,4/24/2026,1,1,0
+1008,500125,Johnston,UNC Johnston,Pediatrics,Observation,3/31/2026,1,0,1
+1007,500126,Johnston,UNC Johnston,Medical/Surgical,Inpatient,5/7/2026,1,1,0
+1006,500127,Rex,UNC Rex Hospital,Cardiology,Emergency,3/6/2026,1,1,0
+1014,500128,Med Center,UNC Medical Center,Telemetry,Emergency,5/19/2026,1,1,0
+1013,500129,Chatham,UNC Chatham,ICU,Inpatient,5/8/2026,1,1,0
+1015,500130,Rex,UNC Rex Hospital,Emergency,Emergency,3/15/2026,1,1,0
+1013,500131,Chatham,UNC Chatham,ICU,Observation,3/3/2026,1,1,0
+1002,500132,Med Center,UNC Medical Center,NICU,Observation,2/27/2026,1,0,1
+1015,500133,Rex,UNC Rex Hospital,Emergency,Observation,3/16/2026,1,1,0
+1004,500134,Rex,UNC Rex Hospital,ICU,Emergency,4/27/2026,1,1,0
+1015,500135,Rex,UNC Rex Hospital,Emergency,Observation,2/4/2026,1,1,0
+1014,500136,Med Center,UNC Medical Center,Telemetry,Observation,1/1/2026,1,1,0
+1014,500137,Med Center,UNC Medical Center,Telemetry,Emergency,2/8/2026,1,1,0
+1007,500138,Johnston,UNC Johnston,Medical/Surgical,Observation,4/27/2026,1,1,0
+1004,500139,Rex,UNC Rex Hospital,ICU,Observation,4/16/2026,1,1,0
+1011,500140,Nash,UNC Nash,PICU,Inpatient,2/8/2026,1,0,1
+1014,500141,Med Center,UNC Medical Center,Telemetry,Observation,4/23/2026,1,1,0
+1014,500142,Med Center,UNC Medical Center,Telemetry,Observation,2/9/2026,1,1,0
+1011,500143,Nash,UNC Nash,PICU,Emergency,1/21/2026,1,0,1
+1015,500144,Rex,UNC Rex Hospital,Emergency,Observation,5/5/2026,1,1,0
+1004,500145,Rex,UNC Rex Hospital,ICU,Observation,1/24/2026,1,1,0
+1015,500146,Rex,UNC Rex Hospital,Emergency,Observation,1/8/2026,1,1,0
+1003,500147,Med Center,UNC Medical Center,Emergency,Inpatient,3/4/2026,1,1,0
+1003,500148,Med Center,UNC Medical Center,Emergency,Observation,1/21/2026,1,1,0
+1015,500149,Rex,UNC Rex Hospital,Emergency,Observation,5/30/2026,1,1,0
+1011,500150,Nash,UNC Nash,PICU,Inpatient,1/3/2026,1,0,1
+1008,500151,Johnston,UNC Johnston,Pediatrics,Observation,3/30/2026,1,0,1
+1004,500152,Rex,UNC Rex Hospital,ICU,Emergency,4/9/2026,1,1,0
+1005,500153,Rex,UNC Rex Hospital,Oncology,Emergency,3/17/2026,1,1,0
+1013,500154,Chatham,UNC Chatham,ICU,Emergency,1/13/2026,1,1,0
+1013,500155,Chatham,UNC Chatham,ICU,Emergency,4/1/2026,1,1,0
+1013,500156,Chatham,UNC Chatham,ICU,Inpatient,2/5/2026,1,1,0
+1010,500157,Nash,UNC Nash,Telemetry,Observation,4/4/2026,1,1,0
+1003,500158,Med Center,UNC Medical Center,Emergency,Observation,2/21/2026,1,1,0
+1014,500159,Med Center,UNC Medical Center,Telemetry,Inpatient,2/12/2026,1,1,0
+1008,500160,Johnston,UNC Johnston,Pediatrics,Observation,1/20/2026,1,0,1
+1014,500161,Med Center,UNC Medical Center,Telemetry,Inpatient,5/23/2026,1,1,0
+1008,500162,Johnston,UNC Johnston,Pediatrics,Observation,4/5/2026,1,0,1
+1002,500163,Med Center,UNC Medical Center,NICU,Emergency,3/1/2026,1,0,1
+1002,500164,Med Center,UNC Medical Center,NICU,Inpatient,4/29/2026,1,0,1
+1005,500165,Rex,UNC Rex Hospital,Oncology,Observation,5/7/2026,1,1,0
+1006,500166,Rex,UNC Rex Hospital,Cardiology,Observation,5/19/2026,1,1,0
+1010,500167,Nash,UNC Nash,Telemetry,Inpatient,4/15/2026,1,1,0
+1014,500168,Med Center,UNC Medical Center,Telemetry,Inpatient,4/3/2026,1,1,0
+1007,500169,Johnston,UNC Johnston,Medical/Surgical,Emergency,3/12/2026,1,1,0
+1011,500170,Nash,UNC Nash,PICU,Inpatient,6/2/2026,1,0,1
+1002,500171,Med Center,UNC Medical Center,NICU,Emergency,5/22/2026,1,0,1
+1001,500172,Med Center,UNC Medical Center,ICU,Inpatient,3/12/2026,1,1,0
+1011,500173,Nash,UNC Nash,PICU,Inpatient,1/7/2026,1,0,1
+1003,500174,Med Center,UNC Medical Center,Emergency,Inpatient,3/9/2026,1,1,0
+1008,500175,Johnston,UNC Johnston,Pediatrics,Emergency,4/25/2026,1,0,1
+1001,500176,Med Center,UNC Medical Center,ICU,Observation,5/14/2026,1,1,0
+1011,500177,Nash,UNC Nash,PICU,Emergency,1/28/2026,1,0,1
+1003,500178,Med Center,UNC Medical Center,Emergency,Observation,1/17/2026,1,1,0
+1010,500179,Nash,UNC Nash,Telemetry,Emergency,5/16/2026,1,1,0
+1002,500180,Med Center,UNC Medical Center,NICU,Observation,5/22/2026,1,0,1
+1006,500181,Rex,UNC Rex Hospital,Cardiology,Emergency,4/27/2026,1,1,0
+1005,500182,Rex,UNC Rex Hospital,Oncology,Inpatient,4/6/2026,1,1,0
+1007,500183,Johnston,UNC Johnston,Medical/Surgical,Emergency,1/25/2026,1,1,0
+1009,500184,Nash,UNC Nash,Emergency,Observation,5/24/2026,1,1,0
+1014,500185,Med Center,UNC Medical Center,Telemetry,Emergency,1/14/2026,1,1,0
+1004,500186,Rex,UNC Rex Hospital,ICU,Observation,2/9/2026,1,1,0
+1002,500187,Med Center,UNC Medical Center,NICU,Emergency,3/13/2026,1,0,1
+1011,500188,Nash,UNC Nash,PICU,Emergency,5/23/2026,1,0,1
+1013,500189,Chatham,UNC Chatham,ICU,Emergency,3/21/2026,1,0,1
+1011,500190,Nash,UNC Nash,PICU,Inpatient,4/13/2026,1,0,1
+1007,500191,Johnston,UNC Johnston,Medical/Surgical,Observation,4/18/2026,1,1,0
+1013,500192,Chatham,UNC Chatham,ICU,Inpatient,5/26/2026,1,1,0
+1011,500193,Nash,UNC Nash,PICU,Observation,1/21/2026,1,0,1
+1005,500194,Rex,UNC Rex Hospital,Oncology,Emergency,2/25/2026,1,1,0
+1011,500195,Nash,UNC Nash,PICU,Emergency,6/1/2026,1,0,1
+1001,500196,Med Center,UNC Medical Center,ICU,Observation,1/2/2026,1,1,0
+1006,500197,Rex,UNC Rex Hospital,Cardiology,Emergency,1/31/2026,1,1,0
+1012,500198,Chatham,UNC Chatham,Maternity,Inpatient,2/28/2026,1,1,0
+1007,500199,Johnston,UNC Johnston,Medical/Surgical,Emergency,1/11/2026,1,1,0
+1007,500200,Johnston,UNC Johnston,Medical/Surgical,Inpatient,5/27/2026,1,1,0

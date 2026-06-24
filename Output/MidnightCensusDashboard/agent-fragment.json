@@ -1,0 +1,177 @@
+{
+  "tableStrategy": "single-flat",
+  "tables": [
+    {
+      "name": "Midnight_Census_Template",
+      "role": "fact",
+      "sourceType": "csv",
+      "sourceFile": "C:/Users/UmeshKumarVermaMAQSo/Desktop/HybridSolution/TableauToPBI-Hybrid/Data/Midnight Census/Midnight_Census_Template.csv"
+    },
+    {
+      "name": "Filter Adults Peds",
+      "role": "param",
+      "sourceType": "datatable",
+      "datatable": {
+        "columns": [
+          { "name": "Filter Adults Peds", "dataType": "string", "type": "STRING" }
+        ],
+        "rows": [
+          ["(All)"],
+          ["Adults"],
+          ["Peds"]
+        ]
+      }
+    },
+    {
+      "name": "Date Agg Level",
+      "role": "param",
+      "sourceType": "datatable",
+      "datatable": {
+        "columns": [
+          { "name": "Date Agg Level", "dataType": "string", "type": "STRING" }
+        ],
+        "rows": [
+          ["Monthly"],
+          ["Daily"]
+        ]
+      }
+    },
+    {
+      "name": "View",
+      "role": "param",
+      "sourceType": "datatable",
+      "datatable": {
+        "columns": [
+          { "name": "View", "dataType": "string", "type": "STRING" }
+        ],
+        "rows": [
+          ["Bar Chart"],
+          ["Data Table"]
+        ]
+      }
+    }
+  ],
+  "relationships": [],
+  "measures": [
+    {
+      "table": "Midnight_Census_Template",
+      "name": "User Defined Census Count",
+      "dax": "SWITCH(\n    SELECTEDVALUE('Filter Adults Peds'[Filter Adults Peds], \"(All)\"),\n    \"(All)\", SUM(Midnight_Census_Template[Census Count]),\n    \"Adults\", SUM(Midnight_Census_Template[Census Count Adults]),\n    \"Peds\", SUM(Midnight_Census_Template[Census Count Peds])\n)",
+      "formatString": "#,0",
+      "displayFolder": "Census",
+      "description": "Census count switched by the Filter Adults/Peds parameter.",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "Default Start Date",
+      "dax": "VAR _m = MONTH(TODAY())\nVAR _y = YEAR(TODAY())\nRETURN\nIF(\n    _m >= 7 || _m <= 9,\n    DATE(_y, 1, 1),\n    IF(_m < 7, DATE(_y - 1, 7, 1), DATE(_y, 7, 1))\n)",
+      "formatString": "m/d/yyyy",
+      "displayFolder": "Date Range",
+      "description": "Default start date for the reporting window.",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "Default End Date",
+      "dax": "TODAY() - 1",
+      "formatString": "m/d/yyyy",
+      "displayFolder": "Date Range",
+      "description": "Default end date (yesterday).",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "Start Date",
+      "dax": "[Default Start Date]",
+      "formatString": "m/d/yyyy",
+      "displayFolder": "Date Range",
+      "description": "Selected reporting window start (defaults to Default Start Date).",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "End Date",
+      "dax": "[Default End Date]",
+      "formatString": "m/d/yyyy",
+      "displayFolder": "Date Range",
+      "description": "Selected reporting window end (defaults to Default End Date).",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "Date Range Filter",
+      "dax": "VAR _d = MAX(Midnight_Census_Template[Census Date])\nRETURN\nIF(_d >= [Start Date] && _d <= [End Date], TRUE(), FALSE())",
+      "formatString": null,
+      "displayFolder": "Date Range",
+      "description": "TRUE when the row's Census Date is within the selected window.",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "Start Month Contains Partial Data?",
+      "dax": "VAR _maxCensus = MAX(Midnight_Census_Template[Census Date])\nVAR _start = [Start Date]\nVAR _firstOfMonth = DATE(YEAR(_start), MONTH(_start), 1)\nRETURN\nIF(\n    YEAR(_maxCensus) = YEAR(_start)\n        && MONTH(_maxCensus) = MONTH(_start)\n        && _start <> _firstOfMonth,\n    1,\n    0\n)",
+      "formatString": "0",
+      "displayFolder": "Partial Data",
+      "description": "1 when the start month of the window is only partially covered.",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "End Month Contains Partial Data?",
+      "dax": "VAR _maxCensus = MAX(Midnight_Census_Template[Census Date])\nVAR _end = [End Date]\nVAR _lastOfMonth = EOMONTH(_end, 0)\nRETURN\nIF(\n    YEAR(_maxCensus) = YEAR(_end)\n        && MONTH(_maxCensus) = MONTH(_end)\n        && _end <> _lastOfMonth,\n    1,\n    0\n)",
+      "formatString": "0",
+      "displayFolder": "Partial Data",
+      "description": "1 when the end month of the window is only partially covered.",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "Partial Months in View?",
+      "dax": "VAR _s = [Start Date]\nVAR _e = [End Date]\nRETURN\nIF(\n    DAY(_s) <> 1 || DAY(_e + 1) <> 1,\n    \"**Partial months are displayed in GRAY**\",\n    \"\"\n)",
+      "formatString": null,
+      "displayFolder": "Partial Data",
+      "description": "Warning text shown when the window includes partial months.",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "Date agg_Monthly",
+      "dax": "IF(SELECTEDVALUE('Date Agg Level'[Date Agg Level], \"Monthly\") = \"Monthly\", \"Include\", \"Exclude\")",
+      "formatString": null,
+      "displayFolder": "View Toggles",
+      "description": "Include/Exclude flag driven by the Date Agg Level parameter (Monthly).",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "Date agg_Daily",
+      "dax": "IF(SELECTEDVALUE('Date Agg Level'[Date Agg Level], \"Monthly\") = \"Daily\", \"Include\", \"Exclude\")",
+      "formatString": null,
+      "displayFolder": "View Toggles",
+      "description": "Include/Exclude flag driven by the Date Agg Level parameter (Daily).",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "View_BarChart",
+      "dax": "IF(SELECTEDVALUE('View'[View], \"Bar Chart\") = \"Bar Chart\", \"Include\", \"Exclude\")",
+      "formatString": null,
+      "displayFolder": "View Toggles",
+      "description": "Include/Exclude flag driven by the View parameter (Bar Chart).",
+      "source": "llm"
+    },
+    {
+      "table": "Midnight_Census_Template",
+      "name": "View_DataTable",
+      "dax": "IF(SELECTEDVALUE('View'[View], \"Bar Chart\") = \"Data Table\", \"Include\", \"Exclude\")",
+      "formatString": null,
+      "displayFolder": "View Toggles",
+      "description": "Include/Exclude flag driven by the View parameter (Data Table).",
+      "source": "llm"
+    }
+  ],
+  "calculatedColumns": [],
+  "visualDecisions": [],
+  "fieldParameters": []
+}

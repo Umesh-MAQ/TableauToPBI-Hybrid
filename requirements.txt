@@ -1,0 +1,6 @@
+# The deterministic engine uses only the Python standard library.
+# These are optional and only sharpen validation / contract checks.
+
+# Stricter JSON Schema validation of decisions.json / fragments
+# (the engine falls back to a minimal required-key check when absent).
+jsonschema>=4.0

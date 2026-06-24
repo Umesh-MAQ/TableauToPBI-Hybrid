@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Migration Classification",
+  "description": "Deterministic split produced by classify.py from analysis.json + dax-partial.json. Tells the agent gap-fill step exactly what is left to author (route='agent') and what is already handled deterministically (route='deterministic'). Routing is binary: every non-easy item goes to a single batched agent call (Sonnet); Opus is a reactive fallback only when merge validation fails.",
+  "type": "object",
+  "required": ["classificationVersion", "tableMap", "schema", "measures", "counts"],
+  "properties": {
+    "classificationVersion": { "type": "string", "const": "1.0" },
+    "tableMap": {
+      "type": "object",
+      "description": "Canonical table names shared by the DAX and schema steps so measures and tables agree on naming.",
+      "required": ["fact", "dimensions", "strategy"],
+      "properties": {
+        "fact": { "type": "string", "description": "host table for measures (single-flat: the one table; star: best-guess fact, agent may refine)" },
+        "dimensions": { "type": "array", "items": { "type": "string" } },
+        "strategy": { "type": "string", "enum": ["single-flat", "star-schema"] }
+      }
+    },
+    "schema": {
+      "type": "object",
+      "required": ["route"],
+      "properties": {
+        "route": { "type": "string", "enum": ["deterministic", "agent"], "description": "deterministic => star_det produced it (single-flat); agent => needs design" },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "measures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["caption", "route"],
+        "properties": {
+          "caption": { "type": "string" },
+          "route": { "type": "string", "enum": ["deterministic", "agent"] },
+          "kind": { "type": "string", "enum": ["measure", "column"], "description": "suggestedDaxKind from IR" },
+          "hint": { "type": ["string", "null"], "description": "pattern tag to enrich the agent prompt only (e.g. lod-fixed, table-calc); never changes routing" }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "properties": {
+        "deterministicMeasures": { "type": "integer" },
+        "agentMeasures": { "type": "integer" }
+      }
+    }
+  }
+}

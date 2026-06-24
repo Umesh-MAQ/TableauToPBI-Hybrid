@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+
+# Power BI local cache / settings (never commit)
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
+
+# Generated migration outputs are reproducible from the source .twb -> keep them
+# out of the repo so pushes stay small. EXCEPTION: agent-fragment.json is the
+# agent-authored gap-fill (measures/visualDecisions); it is NOT reproducible
+# without re-running the LLM, so it is kept under version control. A clone can
+# then regenerate every .pbip deterministically via `migrate.py finish`.
+Output/*
+!Output/*/
+Output/*/*
+!Output/*/agent-fragment.json

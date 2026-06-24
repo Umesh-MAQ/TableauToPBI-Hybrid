@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Migration Decisions Contract",
+  "description": "The ONLY artifact the LLM produces for code-generation stages. Consumed together with analysis.json (IR) by emit_tmdl.py and emit_pbir.py. Every field the parser could not resolve deterministically is filled here by an agent.",
+  "type": "object",
+  "required": ["modelName", "tableStrategy", "tables", "measures"],
+  "properties": {
+    "decisionsVersion": { "type": "string", "const": "1.0" },
+    "modelName": { "type": "string", "description": "PascalCase, matches IR workbook.pascalName" },
+    "tableStrategy": { "type": "string", "enum": ["single-flat", "star-schema"] },
+    "tables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "role"],
+        "properties": {
+          "name": { "type": "string" },
+          "role": { "type": "string", "enum": ["fact", "dim", "param", "date"] },
+          "sourceType": { "type": "string", "enum": ["csv", "excel", "sql", "datatable", "calendar"] },
+          "sourceFile": { "type": ["string", "null"], "description": "absolute path for File.Contents" },
+          "keyColumns": { "type": "array", "items": { "type": "string" } },
+          "dedupKey": { "type": ["string", "null"], "description": "Table.Distinct key for dimension one-side" },
+          "datatable": {
+            "type": ["object", "null"],
+            "description": "for role=param: literal rows",
+            "properties": {
+              "columns": { "type": "array", "items": { "type": "object" } },
+              "rows": { "type": "array" }
+            }
+          }
+        }
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fromColumn", "toColumn"],
+        "properties": {
+          "fromColumn": { "type": "string", "description": "Table.Column (many side)" },
+          "toColumn": { "type": "string", "description": "Table.Column (one side)" },
+          "crossFilter": { "type": "string", "enum": ["single", "both"], "default": "single" },
+          "active": { "type": "boolean", "default": true }
+        }
+      }
+    },
+    "measures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["table", "name", "dax"],
+        "properties": {
+          "table": { "type": "string", "description": "host table" },
+          "name": { "type": "string" },
+          "dax": { "type": "string" },
+          "formatString": { "type": ["string", "null"] },
+          "displayFolder": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] },
+          "source": { "type": "string", "enum": ["template", "llm"], "description": "template = from map_dax.py, llm = agent authored" }
+        }
+      }
+    },
+    "calculatedColumns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["table", "name", "dax"],
+        "properties": {
+          "table": { "type": "string" },
+          "name": { "type": "string" },
+          "dax": { "type": "string" },
+          "dataType": { "type": ["string", "null"] },
+          "formatString": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "visualDecisions": {
+      "type": "array",
+      "description": "Resolves IR worksheets where inferredVisualType was null (ambiguous).",
+      "items": {
+        "type": "object",
+        "required": ["worksheet", "visualType"],
+        "properties": {
+          "worksheet": { "type": "string" },
+          "visualType": { "type": "string", "description": "Power BI visualType e.g. barChart, tableEx, slicer, card" },
+          "reason": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "fieldParameters": {
+      "type": "array",
+      "description": "Power BI field parameters that swap a visual's axis/value (reproduces Tableau parameter-driven Monthly/Daily or Bar/Table toggles).",
+      "items": {
+        "type": "object",
+        "required": ["name", "fields"],
+        "properties": {
+          "name": { "type": "string", "description": "field parameter table + column name (e.g. 'Date Granularity')" },
+          "appliesTo": {
+            "type": "array",
+            "description": "Worksheet names whose axis this parameter drives; the first is kept as the live chart, the rest are suppressed as duplicates.",
+            "items": { "type": "string" }
+          },
+          "axis": { "type": "string", "enum": ["category", "value"], "default": "category" },
+          "fields": {
+            "type": "array",
+            "description": "Ordered selectable fields; the first is the default.",
+            "items": {
+              "type": "object",
+              "required": ["label", "table", "column"],
+              "properties": {
+                "label": { "type": "string" },
+                "table": { "type": "string" },
+                "column": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

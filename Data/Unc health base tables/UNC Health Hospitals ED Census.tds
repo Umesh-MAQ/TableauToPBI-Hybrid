@@ -1,0 +1,238 @@
+<?xml version='1.0' encoding='utf-8' ?>
+
+<!-- build 20242.25.0710.1539                               -->
+<datasource formatted-name='UNC Health Hospitals ED Census (local copy)' inline='true' source-platform='win' version='18.1' xmlns:user='http://www.tableausoftware.com/xml/user'>
+  <document-format-change-manifest>
+    <_.fcp.ObjectModelEncapsulateLegacy.true...ObjectModelEncapsulateLegacy />
+    <_.fcp.ObjectModelExtractV2.true...ObjectModelExtractV2 />
+    <_.fcp.ObjectModelTableType.true...ObjectModelTableType />
+    <_.fcp.SchemaViewerObjectModel.true...SchemaViewerObjectModel />
+    <_.fcp.VConnDownstreamExtractsWithWarnings.true...VConnDownstreamExtractsWithWarnings />
+  </document-format-change-manifest>
+  <connection class='federated'>
+    <named-connections>
+      <named-connection caption='denodo.unch.unc.edu' name='denodo_jdbc.0m3utxc1vk850n111ekui0zf2bwb'>
+        <connection authentication='auth-user-pass' class='denodo_jdbc' one-time-sql='' port='9999' schema='REPORTING_EHR' server='denodo.unch.unc.edu' server-oauth='' sslmode='' username='SAP_TABLEAU_CENSUS_ONLY' v-chunksize='1000' v-connectdatabase='REPORTING_EHR' v-querytimeout='900000' v-useragent='Denodo-Tableau-JDBC-Connector' v-wanoptimized='false' workgroup-auth-mode='prompt' />
+      </named-connection>
+    </named-connections>
+    <_.fcp.ObjectModelEncapsulateLegacy.false...relation connection='denodo_jdbc.0m3utxc1vk850n111ekui0zf2bwb' name='Custom SQL Query' type='text'>SELECT&#13;&#10;&#9;PARENT_LOCATION_NAME&#13;&#10;&#9;, LOCATION_NAME&#13;&#10;&#9;, CURRENT_EMERGENCY_DEPARTMENT_NAME&#13;&#10;&#9;, EMERGENCY_DEPARTMENT_CURRENT_CARE_AREA&#13;&#10;&#9;, MAX(LAST_WAREHOUSE_UPDATE_INSTANT) AS LAST_UPDATE&#13;&#10;&#9;, COUNT(DISTINCT ENCOUNTER_EPIC_CSN) AS ENCOUNTER_COUNT&#13;&#10;FROM &quot;REPORTING_EHR&quot;.ED_REAL_TIME_CENSUS_MASTER&#13;&#10;WHERE IS_CURRENT = 1&#13;&#10;&#9;AND CURRENT_EMERGENCY_DEPARTMENT_NAME LIKE &apos;EMERG%&apos;&#13;&#10;GROUP BY PARENT_LOCATION_NAME&#13;&#10;&#9;, LOCATION_NAME&#13;&#10;&#9;, CURRENT_EMERGENCY_DEPARTMENT_NAME&#13;&#10;&#9;, EMERGENCY_DEPARTMENT_CURRENT_CARE_AREA</_.fcp.ObjectModelEncapsulateLegacy.false...relation>
+    <_.fcp.ObjectModelEncapsulateLegacy.true...relation connection='denodo_jdbc.0m3utxc1vk850n111ekui0zf2bwb' name='Custom SQL Query' type='text'>SELECT&#13;&#10;&#9;PARENT_LOCATION_NAME&#13;&#10;&#9;, LOCATION_NAME&#13;&#10;&#9;, CURRENT_EMERGENCY_DEPARTMENT_NAME&#13;&#10;&#9;, EMERGENCY_DEPARTMENT_CURRENT_CARE_AREA&#13;&#10;&#9;, MAX(LAST_WAREHOUSE_UPDATE_INSTANT) AS LAST_UPDATE&#13;&#10;&#9;, COUNT(DISTINCT ENCOUNTER_EPIC_CSN) AS ENCOUNTER_COUNT&#13;&#10;FROM &quot;REPORTING_EHR&quot;.ED_REAL_TIME_CENSUS_MASTER&#13;&#10;WHERE IS_CURRENT = 1&#13;&#10;&#9;AND CURRENT_EMERGENCY_DEPARTMENT_NAME LIKE &apos;EMERG%&apos;&#13;&#10;GROUP BY PARENT_LOCATION_NAME&#13;&#10;&#9;, LOCATION_NAME&#13;&#10;&#9;, CURRENT_EMERGENCY_DEPARTMENT_NAME&#13;&#10;&#9;, EMERGENCY_DEPARTMENT_CURRENT_CARE_AREA</_.fcp.ObjectModelEncapsulateLegacy.true...relation>
+    <metadata-records>
+      <metadata-record class='column'>
+        <remote-name>parent_location_name</remote-name>
+        <remote-type>130</remote-type>
+        <local-name>[parent_location_name]</local-name>
+        <parent-name>[Custom SQL Query]</parent-name>
+        <remote-alias>parent_location_name</remote-alias>
+        <ordinal>1</ordinal>
+        <local-type>string</local-type>
+        <aggregation>Count</aggregation>
+        <width>200</width>
+        <contains-null>true</contains-null>
+        <attributes>
+          <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+        </attributes>
+        <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+      </metadata-record>
+      <metadata-record class='column'>
+        <remote-name>location_name</remote-name>
+        <remote-type>130</remote-type>
+        <local-name>[location_name]</local-name>
+        <parent-name>[Custom SQL Query]</parent-name>
+        <remote-alias>location_name</remote-alias>
+        <ordinal>2</ordinal>
+        <local-type>string</local-type>
+        <aggregation>Count</aggregation>
+        <width>200</width>
+        <contains-null>true</contains-null>
+        <attributes>
+          <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+        </attributes>
+        <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+      </metadata-record>
+      <metadata-record class='column'>
+        <remote-name>current_emergency_department_name</remote-name>
+        <remote-type>129</remote-type>
+        <local-name>[current_emergency_department_name]</local-name>
+        <parent-name>[Custom SQL Query]</parent-name>
+        <remote-alias>current_emergency_department_name</remote-alias>
+        <ordinal>3</ordinal>
+        <local-type>string</local-type>
+        <aggregation>Count</aggregation>
+        <width>255</width>
+        <contains-null>true</contains-null>
+        <attributes>
+          <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+        </attributes>
+        <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+      </metadata-record>
+      <metadata-record class='column'>
+        <remote-name>emergency_department_current_care_area</remote-name>
+        <remote-type>129</remote-type>
+        <local-name>[emergency_department_current_care_area]</local-name>
+        <parent-name>[Custom SQL Query]</parent-name>
+        <remote-alias>emergency_department_current_care_area</remote-alias>
+        <ordinal>4</ordinal>
+        <local-type>string</local-type>
+        <aggregation>Count</aggregation>
+        <width>255</width>
+        <contains-null>true</contains-null>
+        <attributes>
+          <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+        </attributes>
+        <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+      </metadata-record>
+      <metadata-record class='column'>
+        <remote-name>last_update</remote-name>
+        <remote-type>135</remote-type>
+        <local-name>[last_update]</local-name>
+        <parent-name>[Custom SQL Query]</parent-name>
+        <remote-alias>last_update</remote-alias>
+        <ordinal>5</ordinal>
+        <local-type>datetime</local-type>
+        <aggregation>Year</aggregation>
+        <contains-null>true</contains-null>
+        <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+      </metadata-record>
+      <metadata-record class='column'>
+        <remote-name>encounter_count</remote-name>
+        <remote-type>20</remote-type>
+        <local-name>[encounter_count]</local-name>
+        <parent-name>[Custom SQL Query]</parent-name>
+        <remote-alias>encounter_count</remote-alias>
+        <ordinal>6</ordinal>
+        <local-type>integer</local-type>
+        <aggregation>Sum</aggregation>
+        <precision>19</precision>
+        <contains-null>true</contains-null>
+        <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+      </metadata-record>
+    </metadata-records>
+  </connection>
+  <aliases enabled='yes' />
+  <column caption='Filter ED Care Area' datatype='string' name='[Filter ED Care Area (copy)_1405404560897888260]' role='dimension' type='nominal'>
+    <calculation class='tableau' formula='[emergency_department_current_care_area]' />
+  </column>
+  <column caption='Filter ED Department' datatype='string' name='[Filter ED Department (copy)_1405404560897798147]' role='dimension' type='nominal'>
+    <calculation class='tableau' formula='[current_emergency_department_name]' />
+  </column>
+  <column caption='Filter Entity' datatype='string' name='[Filter Entity (copy)_1405404560897650690]' role='dimension' type='nominal'>
+    <calculation class='tableau' formula='[parent_location_name]' />
+  </column>
+  <column caption='Filter Entity Site' datatype='string' name='[Filter Entity Site (copy)_1405404560897466369]' role='dimension' type='nominal'>
+    <calculation class='tableau' formula='[location_name]' />
+  </column>
+  <_.fcp.ObjectModelTableType.true...column caption='Custom SQL Query' datatype='table' name='[__tableau_internal_object_id__].[_EFB214F732664022BD8628FF99C4A31B]' role='measure' type='quantitative' />
+  <extract _.fcp.ObjectModelExtractV2.true...object-id='' _.fcp.VConnDownstreamExtractsWithWarnings.true...user-specific='false' count='-1' enabled='true' units='records'>
+    <connection authentication='auth-none' author-locale='en_US' class='hyper' dbname='//vscifs1/BIArchive/BI Modernization Files/Tableau POC files/Tableau datasources/UNC Health Hospitals ED Census.tds Files/Data/Extracts/UNC Health Hospitals ED Census.hyper' schema='Extract' sslmode='' tablename='Extract' update-time='06/03/2026 01:52:54 PM' username=''>
+      <_.fcp.ObjectModelEncapsulateLegacy.false...relation name='Extract' table='[Extract].[Extract]' type='table' />
+      <_.fcp.ObjectModelEncapsulateLegacy.true...relation name='Extract' table='[Extract].[Extract]' type='table' />
+      <metadata-records>
+        <metadata-record class='column'>
+          <remote-name>parent_location_name</remote-name>
+          <remote-type>129</remote-type>
+          <local-name>[parent_location_name]</local-name>
+          <parent-name>[Extract]</parent-name>
+          <remote-alias>parent_location_name</remote-alias>
+          <ordinal>0</ordinal>
+          <family>Custom SQL Query</family>
+          <local-type>string</local-type>
+          <aggregation>Count</aggregation>
+          <approx-count>14</approx-count>
+          <contains-null>true</contains-null>
+          <collation flag='0' name='LROOT' />
+          <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+        </metadata-record>
+        <metadata-record class='column'>
+          <remote-name>location_name</remote-name>
+          <remote-type>129</remote-type>
+          <local-name>[location_name]</local-name>
+          <parent-name>[Extract]</parent-name>
+          <remote-alias>location_name</remote-alias>
+          <ordinal>1</ordinal>
+          <family>Custom SQL Query</family>
+          <local-type>string</local-type>
+          <aggregation>Count</aggregation>
+          <approx-count>18</approx-count>
+          <contains-null>true</contains-null>
+          <collation flag='0' name='LROOT' />
+          <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+        </metadata-record>
+        <metadata-record class='column'>
+          <remote-name>current_emergency_department_name</remote-name>
+          <remote-type>129</remote-type>
+          <local-name>[current_emergency_department_name]</local-name>
+          <parent-name>[Extract]</parent-name>
+          <remote-alias>current_emergency_department_name</remote-alias>
+          <ordinal>2</ordinal>
+          <family>Custom SQL Query</family>
+          <local-type>string</local-type>
+          <aggregation>Count</aggregation>
+          <approx-count>18</approx-count>
+          <contains-null>true</contains-null>
+          <collation flag='0' name='LROOT' />
+          <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+        </metadata-record>
+        <metadata-record class='column'>
+          <remote-name>emergency_department_current_care_area</remote-name>
+          <remote-type>129</remote-type>
+          <local-name>[emergency_department_current_care_area]</local-name>
+          <parent-name>[Extract]</parent-name>
+          <remote-alias>emergency_department_current_care_area</remote-alias>
+          <ordinal>3</ordinal>
+          <family>Custom SQL Query</family>
+          <local-type>string</local-type>
+          <aggregation>Count</aggregation>
+          <approx-count>44</approx-count>
+          <contains-null>true</contains-null>
+          <collation flag='0' name='LROOT' />
+          <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+        </metadata-record>
+        <metadata-record class='column'>
+          <remote-name>last_update</remote-name>
+          <remote-type>135</remote-type>
+          <local-name>[last_update]</local-name>
+          <parent-name>[Extract]</parent-name>
+          <remote-alias>last_update</remote-alias>
+          <ordinal>4</ordinal>
+          <family>Custom SQL Query</family>
+          <local-type>datetime</local-type>
+          <aggregation>Year</aggregation>
+          <approx-count>1</approx-count>
+          <contains-null>true</contains-null>
+          <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+        </metadata-record>
+        <metadata-record class='column'>
+          <remote-name>encounter_count</remote-name>
+          <remote-type>20</remote-type>
+          <local-name>[encounter_count]</local-name>
+          <parent-name>[Extract]</parent-name>
+          <remote-alias>encounter_count</remote-alias>
+          <ordinal>5</ordinal>
+          <family>Custom SQL Query</family>
+          <local-type>integer</local-type>
+          <aggregation>Sum</aggregation>
+          <approx-count>19</approx-count>
+          <contains-null>true</contains-null>
+          <_.fcp.ObjectModelEncapsulateLegacy.true...object-id>[_EFB214F732664022BD8628FF99C4A31B]</_.fcp.ObjectModelEncapsulateLegacy.true...object-id>
+        </metadata-record>
+      </metadata-records>
+    </connection>
+  </extract>
+  <layout _.fcp.SchemaViewerObjectModel.false...dim-percentage='0.5' _.fcp.SchemaViewerObjectModel.false...measure-percentage='0.4' dim-ordering='alphabetic' measure-ordering='alphabetic' show-structure='true' />
+  <semantic-values>
+    <semantic-value key='[Country].[Name]' value='&quot;United States&quot;' />
+  </semantic-values>
+  <_.fcp.ObjectModelEncapsulateLegacy.true...object-graph>
+    <objects>
+      <object caption='Custom SQL Query' id='_EFB214F732664022BD8628FF99C4A31B'>
+        <properties context=''>
+          <relation connection='denodo_jdbc.0m3utxc1vk850n111ekui0zf2bwb' name='Custom SQL Query' type='text'>SELECT&#13;&#10;&#9;PARENT_LOCATION_NAME&#13;&#10;&#9;, LOCATION_NAME&#13;&#10;&#9;, CURRENT_EMERGENCY_DEPARTMENT_NAME&#13;&#10;&#9;, EMERGENCY_DEPARTMENT_CURRENT_CARE_AREA&#13;&#10;&#9;, MAX(LAST_WAREHOUSE_UPDATE_INSTANT) AS LAST_UPDATE&#13;&#10;&#9;, COUNT(DISTINCT ENCOUNTER_EPIC_CSN) AS ENCOUNTER_COUNT&#13;&#10;FROM &quot;REPORTING_EHR&quot;.ED_REAL_TIME_CENSUS_MASTER&#13;&#10;WHERE IS_CURRENT = 1&#13;&#10;&#9;AND CURRENT_EMERGENCY_DEPARTMENT_NAME LIKE &apos;EMERG%&apos;&#13;&#10;GROUP BY PARENT_LOCATION_NAME&#13;&#10;&#9;, LOCATION_NAME&#13;&#10;&#9;, CURRENT_EMERGENCY_DEPARTMENT_NAME&#13;&#10;&#9;, EMERGENCY_DEPARTMENT_CURRENT_CARE_AREA</relation>
+        </properties>
+        <properties context='extract'>
+          <relation name='Extract' table='[Extract].[Extract]' type='table' />
+        </properties>
+      </object>
+    </objects>
+  </_.fcp.ObjectModelEncapsulateLegacy.true...object-graph>
+</datasource>

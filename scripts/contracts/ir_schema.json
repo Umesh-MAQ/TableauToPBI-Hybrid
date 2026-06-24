@@ -1,0 +1,382 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Tableau Intermediate Representation (IR)",
+  "description": "Machine-readable contract produced by parse_twb.py from a .twb file. Canonical source of truth for all downstream deterministic generators and LLM gap-fill stages.",
+  "type": "object",
+  "required": ["irVersion", "workbook", "dataSources", "columns", "calculatedFields", "parameters", "worksheets", "dashboards", "rls"],
+  "properties": {
+    "irVersion": { "type": "string", "const": "1.0" },
+    "workbook": {
+      "type": "object",
+      "required": ["name", "pascalName"],
+      "properties": {
+        "name": { "type": "string" },
+        "pascalName": { "type": "string", "description": "PascalCase output folder + model name" },
+        "sourcePath": { "type": "string" },
+        "version": { "type": "string" },
+        "platform": { "type": "string" }
+      }
+    },
+    "dataSources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "connectionClass", "sourceType"],
+        "properties": {
+          "name": { "type": "string" },
+          "internalName": { "type": "string" },
+          "connectionClass": { "type": "string", "description": "raw Tableau class e.g. textscan, sqlserver" },
+          "sourceType": { "type": "string", "enum": ["CSV", "Excel", "SqlServer", "PostgreSQL", "MySQL", "Oracle", "Snowflake", "Databricks", "BigQuery", "Hyper", "ODBC", "Inline", "Unknown"] },
+          "files": { "type": "array", "items": { "type": "string" } },
+          "server": { "type": ["string", "null"] },
+          "database": { "type": ["string", "null"] },
+          "schema": { "type": ["string", "null"] },
+          "tables": { "type": "array", "items": { "type": "string" } },
+          "relations": {
+            "type": "array",
+            "description": "physical relations: table refs (schema/table) and custom-SQL blocks",
+            "items": {
+              "type": "object",
+              "properties": {
+                "schema": { "type": ["string", "null"] },
+                "table": { "type": ["string", "null"] },
+                "type": { "type": "string", "enum": ["table", "customSql"] },
+                "sql": { "type": "string", "description": "custom SQL text (type=customSql only)" }
+              }
+            }
+          },
+          "customSql": { "type": ["string", "null"], "description": "first custom-SQL query backing the datasource (relation type='text')" },
+          "joins": {
+            "type": "array",
+            "description": "physical joins between tables inside the datasource (relation type='join'); drives star-schema relationship recreation",
+            "items": {
+              "type": "object",
+              "properties": {
+                "joinType": { "type": "string", "description": "inner/left/right/full" },
+                "leftTable": { "type": ["string", "null"] },
+                "rightTable": { "type": ["string", "null"] },
+                "leftColumn": { "type": ["string", "null"] },
+                "rightColumn": { "type": ["string", "null"] }
+              }
+            }
+          },
+          "connectionMode": { "type": "string", "enum": ["import", "directQuery"], "description": "advisory: live DB -> directQuery, extract/file -> import" },
+          "active": { "type": "boolean", "description": "referenced by at least one worksheet" }
+        }
+      }
+    },
+    "columns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["datasource", "name", "dataType", "role"],
+        "properties": {
+          "datasource": { "type": "string" },
+          "name": { "type": "string", "description": "physical/source column name" },
+          "caption": { "type": ["string", "null"] },
+          "dataType": { "type": "string", "enum": ["string", "integer", "real", "boolean", "date", "datetime"] },
+          "role": { "type": "string", "enum": ["dimension", "measure"] },
+          "semanticRole": { "type": ["string", "null"] },
+          "format": { "type": ["string", "null"], "description": "Tableau number/date format mask: nested <format> element, else the column's default-format attribute (currency/percent/decimal masks)" },
+          "ordinal": { "type": ["integer", "null"] },
+          "physicalTable": { "type": ["string", "null"], "description": "parent physical table from <metadata-records> (parent-name)" },
+          "remoteName": { "type": ["string", "null"], "description": "source/remote column name from <metadata-records>" },
+          "metaType": { "type": ["string", "null"], "description": "Tableau local-type from <metadata-records> (integer/string/date/...)" }
+        }
+      }
+    },
+    "calculatedFields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["caption", "formula"],
+        "properties": {
+          "caption": { "type": "string" },
+          "fieldName": { "type": ["string", "null"] },
+          "dataType": { "type": ["string", "null"] },
+          "role": { "type": ["string", "null"], "description": "verbatim Tableau role: measure | dimension" },
+          "formula": { "type": "string", "description": "entity-decoded Tableau formula; inter-calc references ([Calculation_<id>] and [Name (copy)_<hash>], incl. ds-qualified) are inlined to [Caption] for readability" },
+          "isTableCalc": { "type": "boolean", "description": "true when the <calculation> carries a <table-calc> element (verbatim XML fact)" },
+          "isLOD": { "type": "boolean", "description": "true when the formula is a Level-of-Detail expression ({FIXED|INCLUDE|EXCLUDE ...}); maps to CALCULATE+ALLEXCEPT-style DAX" },
+          "dependsOn": { "type": "array", "items": { "type": "string" }, "description": "distinct field/column names this formula references (which columns the logic uses)" },
+          "complexity": { "type": "string", "enum": ["trivial", "complex"], "description": "legacy hint kept for back-compat; classify.py supersedes it with a binary route" },
+          "route": { "type": "string", "enum": ["deterministic", "agent"], "description": "optional binary route stamped by classify.py: deterministic = map_dax translated it, agent = needs the batched agent call" },
+          "suggestedDaxKind": { "type": "string", "enum": ["measure", "column"] }
+        }
+      }
+    },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "dataType", "domainType"],
+        "properties": {
+          "name": { "type": "string" },
+          "internalName": { "type": ["string", "null"] },
+          "dataType": { "type": "string" },
+          "domainType": { "type": "string", "enum": ["list", "range", "any"] },
+          "default": { "type": ["string", "null"] },
+          "values": { "type": "array", "items": { "type": "string" } },
+          "valueLabels": { "type": ["object", "null"], "description": "raw parameter value -> friendly display alias (e.g. '\"Adults\"' -> 'Adults 18+'); null when the parameter has no aliases", "additionalProperties": { "type": "string" } },
+          "range": {
+            "type": ["object", "null"],
+            "description": "min/max/granularity for range params (Power BI What-If)",
+            "properties": {
+              "min": { "type": ["string", "null"] },
+              "max": { "type": ["string", "null"] },
+              "granularity": { "type": ["string", "null"] }
+            }
+          },
+          "format": { "type": ["string", "null"], "description": "verbatim Tableau default-format string" }
+        }
+      }
+    },
+    "worksheets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "markClass"],
+        "properties": {
+          "name": { "type": "string" },
+          "datasource": { "type": ["string", "null"] },
+          "markClass": { "type": "string" },
+          "rows": { "type": "array", "items": { "type": "string" } },
+          "cols": { "type": "array", "items": { "type": "string" } },
+          "encodings": {
+            "type": "object",
+            "description": "Tableau mark encoding channels mapped to fields (null when unused)",
+            "properties": {
+              "color": { "type": ["string", "null"] },
+              "size": { "type": ["string", "null"] },
+              "text": { "type": ["string", "null"] },
+              "shape": { "type": ["string", "null"] },
+              "detail": { "type": ["string", "null"], "description": "Tableau LOD/detail channel" },
+              "label": { "type": ["string", "null"] },
+              "tooltip": { "type": ["string", "null"] },
+              "wedgeSize": { "type": ["string", "null"], "description": "pie angle channel" },
+              "path": { "type": ["string", "null"] }
+            }
+          },
+          "axes": {
+            "type": "object",
+            "description": "Explicit 'what vs what' of the chart: category axis (X) and value axis (Y).",
+            "properties": {
+              "category": { "type": ["string", "null"], "description": "field on the category axis (X for vertical charts)" },
+              "categoryLevel": { "type": ["string", "null"], "description": "date grain of the category axis (year/quarter/month/week/day) if any" },
+              "values": { "type": "array", "items": { "type": "string" }, "description": "ordered measures plotted on the value axis (Y)" },
+              "orientation": { "type": ["string", "null"] }
+            }
+          },
+          "orientation": { "type": ["string", "null"], "description": "horizontal (measure on columns) | vertical (measure on rows) | null; distinguishes barChart vs columnChart" },
+          "measures": {
+            "type": "array",
+            "description": "Aggregated measures placed on the sheet, from <datasource-dependencies>/<column-instance>; authoritative field+aggregation",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": { "type": "string" },
+                "agg": { "type": "string", "description": "SUM | AVG | COUNT | COUNTD | MIN | MAX | MEDIAN | ..." },
+                "column": { "type": "string", "description": "underlying source column" }
+              }
+            }
+          },
+          "topN": {
+            "type": ["object", "null"],
+            "description": "Top/Bottom-N filter on the sheet (from <groupfilter>); null when absent",
+            "properties": {
+              "field": { "type": "string" },
+              "n": { "type": "integer" },
+              "direction": { "type": "string", "description": "TOP | BOTTOM" },
+              "byMeasure": { "type": ["string", "null"], "description": "ranking expression, e.g. COUNTD([show_id])" },
+              "sortDirection": { "type": ["string", "null"], "description": "ASC | DESC" }
+            }
+          },
+          "caption": { "type": ["string", "null"], "description": "Sheet caption label skeleton; field/param tokens shown as {Resolved Field}" },
+          "title": { "type": ["string", "null"], "description": "Sheet title (above the viz) label skeleton; dynamic value tokens shown as {value}" },
+          "filters": { "type": "array", "items": { "type": "string" }, "description": "Fields filtering this sheet (from <slices>); action-generated and internal :pseudo fields excluded" },
+          "filterDetails": {
+            "type": "array",
+            "description": "Per-filter metadata: which column, the filter type, include/exclude and selected members/bounds. Union of <filter> elements and <slices>; data is never read.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": { "type": "string" },
+                "filterClass": { "type": ["string", "null"], "description": "categorical | quantitative | range | relative-date | null (slice-only)" },
+                "scope": { "type": ["string", "null"], "enum": ["include", "exclude", null] },
+                "values": { "type": ["array", "null"], "items": { "type": "string" }, "description": "selected categorical members (capped at 25)" },
+                "range": { "type": ["object", "null"], "description": "{min,max} numeric bounds for quantitative/range filters" }
+              }
+            }
+          },
+          "sort": {
+            "type": ["object", "null"],
+            "description": "Explicit field sort applied to the sheet, else null",
+            "properties": {
+              "field": { "type": "string" },
+              "direction": { "type": ["string", "null"], "description": "ASC | DESC" }
+            }
+          },
+          "formatting": {
+            "type": ["object", "null"],
+            "description": "Compact visual formatting summary; null when the sheet carries no explicit formatting",
+            "properties": {
+              "colorPalette": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Ordered #hex mark colours" },
+              "gridlines": { "type": ["boolean", "null"] },
+              "showFieldLabels": { "type": ["boolean", "null"] },
+              "markStroke": { "type": ["string", "null"], "description": "#hex mark border colour" },
+              "showMarkLabels": { "type": ["boolean", "null"] },
+              "markColor": { "type": ["string", "null"], "description": "#hex explicit single mark fill colour" },
+              "background": { "type": ["string", "null"], "description": "#hex sheet/table background colour (dark-theme signal)" },
+              "fontName": { "type": ["string", "null"], "description": "Tableau font-family for data text" },
+              "fontSize": { "type": ["string", "null"], "description": "Tableau font-size for data text (pt)" },
+              "fontColor": { "type": ["string", "null"], "description": "#hex data/label text colour" },
+              "alignment": { "type": ["string", "null"], "description": "text-align: left/center/right" },
+              "titleColor": { "type": ["string", "null"], "description": "#hex worksheet title colour" },
+              "titleFontSize": { "type": ["string", "null"], "description": "worksheet title font-size (pt)" }
+            }
+          }
+        }
+      }
+    },
+    "dashboards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "size", "zones"],
+        "properties": {
+          "name": { "type": "string" },
+          "size": {
+            "type": "object",
+            "properties": { "w": { "type": "integer" }, "h": { "type": "integer" } }
+          },
+          "title": { "type": ["string", "null"], "description": "Dashboard title label skeleton, else null" },
+          "background": { "type": ["string", "null"], "description": "Dashboard background #hex colour, else null" },
+          "zones": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string", "enum": ["viz", "filter", "paramctrl", "text", "other"] },
+                "worksheet": { "type": ["string", "null"] },
+                "x": { "type": "integer" }, "y": { "type": "integer" },
+                "w": { "type": "integer" }, "h": { "type": "integer" }
+              }
+            }
+          },
+          "buttons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "action": { "type": "string", "enum": ["goto-sheet", "toggle", "other"] },
+                "target": { "type": ["string", "null"] },
+                "tooltip": { "type": ["string", "null"] },
+                "x": { "type": "integer" }, "y": { "type": "integer" },
+                "w": { "type": "integer" }, "h": { "type": "integer" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "description": "Tableau dashboard actions -> Power BI interactions (filter/highlight/url)",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "enum": ["filter", "highlight", "url", "other"] },
+          "sourceSheet": { "type": ["string", "null"] },
+          "sourceDashboard": { "type": ["string", "null"] },
+          "target": { "type": ["string", "null"] },
+          "activation": { "type": ["string", "null"], "description": "on-select | on-hover | on-menu" }
+        }
+      }
+    },
+    "physicalTables": {
+      "type": "array",
+      "description": "Distinct physical source tables/relations with their column lists (drives fact/dimension assignment)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "columns": { "type": "array", "items": { "type": "string" } },
+          "parse": {
+            "type": "object",
+            "description": "CSV parse settings read from workbook METADATA (<columns> attrs + <metadata-record class='capability'>), so the emitter never sniffs the data file.",
+            "properties": {
+              "delimiter": { "type": ["string", "null"], "description": "field separator, e.g. ';' or ','" },
+              "charset": { "type": ["string", "null"], "description": "e.g. UTF-8, windows-1252" },
+              "codepage": { "type": "integer", "description": "Windows code page for M Encoding= (65001=UTF-8, 1252=windows-1252)" },
+              "hasHeader": { "type": "boolean" },
+              "decimalChar": { "type": ["string", "null"], "description": "',' for European number formats" },
+              "thousandsChar": { "type": ["string", "null"] },
+              "locale": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+    "columnTableMap": {
+      "type": "object",
+      "description": "Logical column name -> owning physical table (from <cols><map>)",
+      "additionalProperties": { "type": "string" }
+    },
+    "relationships": {
+      "type": "array",
+      "description": "Tableau object-graph physical joins; primary input for Power BI star-schema relationships",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fromTable": { "type": "string" },
+          "toTable": { "type": "string" },
+          "fromColumn": { "type": "string" },
+          "toColumn": { "type": "string" },
+          "operator": { "type": "string" },
+          "toSideUnique": { "type": "boolean", "description": "true => toTable is the 'one' (dimension) side" }
+        }
+      }
+    },
+    "hierarchies": {
+      "type": "array",
+      "description": "Tableau drill paths -> Power BI hierarchies",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "datasource": { "type": ["string", "null"] },
+          "levels": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "sets": { "type": "array", "items": { "type": "object" } },
+    "groups": { "type": "array", "items": { "type": "object" } },
+    "bins": { "type": "array", "items": { "type": "object" } },
+    "theme": {
+      "type": ["object", "null"],
+      "description": "Workbook fonts + mark colour palette for the report theme",
+      "properties": {
+        "fontFamily": { "type": ["string", "null"] },
+        "titleFontSize": { "type": ["string", "null"] },
+        "worksheetFontSize": { "type": ["string", "null"] },
+        "formatRules": { "type": ["object", "null"] },
+        "markColors": { "type": ["array", "null"], "items": { "type": "string" } }
+      }
+    },
+    "blending": { "type": ["object", "null"] },
+    "rls": {
+      "type": "object",
+      "required": ["detected"],
+      "properties": {
+        "detected": { "type": "boolean" },
+        "type": { "type": ["string", "null"], "enum": ["Dynamic", "Static", "Group-based", null] },
+        "securedTable": { "type": ["string", "null"] },
+        "mappingTable": { "type": ["string", "null"] },
+        "userColumn": { "type": ["string", "null"] },
+        "signalField": { "type": ["string", "null"], "description": "calc field whose formula triggered RLS detection" }
+      }
+    }
+  }
+}
