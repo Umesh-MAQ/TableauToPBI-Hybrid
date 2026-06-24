@@ -41,6 +41,7 @@ _RECONCILE = os.path.join(_HERE, os.pardir, "dax", "reconcile.py")
 # star schemas (where the column is not necessarily on the fact).
 sys.path.insert(0, os.path.join(_HERE, os.pardir, "emit"))
 import pbir_bind as PB  # noqa: E402
+import screenshot_overlay as SO  # noqa: E402  (screenshot visual-intent overlay)
 
 
 def _norm(name: str) -> str:
@@ -306,6 +307,66 @@ def unsafe_calculate_filter_measures(measures: List[Dict]) -> List[str]:
             if _residual_measure_in_filter(m.get("dax", ""), names)]
 
 
+# --- Calculated-column measure-reference guard --------------------------------
+# A CALCULATED COLUMN that references a MEASURE makes Power BI wrap the measure in
+# an implicit CALCULATE (context transition). Context transition takes the current
+# row and filters EVERY column of the host table — including the column being
+# defined and its sibling calculated columns — so the column depends on itself and
+# the engine fails the whole table refresh with:
+#     "A cyclic reference was encountered during evaluation."
+# It is also semantically wrong: a calc column is materialised at refresh and so
+# can never react to a slicer-driven measure (e.g. a [Selected Year] parameter).
+# The correct home for that logic is a measure. We therefore DROP any calc column
+# whose DAX references a measure, deterministically, so no migration (now or
+# future) can ever ship this cyclic-reference error.
+
+# A *bare* [Name] ref that is NOT preceded by a table qualifier (' , ] or word
+# char). ``Orders[Sales]`` is a column ref (qualified); a lone ``[Selected Year]``
+# is a measure-or-column ref. We resolve it against the known measure-name set.
+_BARE_BRKT_REF_RE = re.compile(r"(?<![')\w])\[([^\]]+)\]")
+
+
+def _calc_column_measure_ref(dax: str, measure_names: set) -> Optional[str]:
+    """Return the name of the first MEASURE a calc column's DAX references via a
+    bare ``[Name]`` (not a ``Table[Col]`` qualifier), else None."""
+    if not dax:
+        return None
+    # Qualified columns inside the same DAX share the [Col] token shape; exclude
+    # them so only genuinely bare references are considered.
+    qualified = {c for _, _, c in _QUALIFIED_REF_RE.findall(dax)}
+    for name in _BARE_BRKT_REF_RE.findall(dax):
+        if name in qualified:
+            continue
+        if name in measure_names:
+            return name
+    return None
+
+
+# Matches a qualified ``'Table'[Col]`` / ``Table[Col]`` reference (table side
+# either quoted or a bare identifier), mirroring validate_semantics._QUALIFIED.
+_QUALIFIED_REF_RE = re.compile(r"(?:'([^']+)'|(\b[A-Za-z_][\w ]*?))\s*\[([^\]]+)\]")
+
+
+def strip_measure_referencing_calc_columns(
+        calc_cols: List[Dict], measure_names: set) -> List[Dict]:
+    """Drop calc columns whose DAX references a measure (cyclic-reference trap).
+
+    Returns the kept columns; emits a warning to stderr for each dropped one so
+    the reason is visible in the finish log."""
+    kept: List[Dict] = []
+    for c in calc_cols:
+        ref = _calc_column_measure_ref(c.get("dax", ""), measure_names)
+        if ref:
+            sys.stderr.write(
+                f"merge: dropping calculated column "
+                f"'{c.get('table')}'[{c.get('name')}] — its DAX references measure "
+                f"[{ref}]; a calc column referencing a measure causes a cyclic "
+                f"reference at refresh and cannot react to a slicer. Use a measure "
+                f"for that logic instead.\n")
+            continue
+        kept.append(c)
+    return kept
+
 
 def _normalize_measure(m: Dict, default_source: str) -> Dict:
     src = m.get("source", default_source)
@@ -433,6 +494,119 @@ def synthesize_pill_measures(ir: Dict, tables: List[Dict], measures: List[Dict],
     return synthesized
 
 
+# Tableau FIXED-LOD aggregation -> DAX function for a synthesized bin column.
+_LOD_BIN_AGG = {
+    "COUNTD": "DISTINCTCOUNT", "DISTINCTCOUNT": "DISTINCTCOUNT",
+    "COUNT": "COUNT", "SUM": "SUM",
+    "AVG": "AVERAGE", "AVERAGE": "AVERAGE", "MIN": "MIN", "MAX": "MAX",
+}
+
+# { FIXED [A] : AGG([B]) } -- a per-entity grouping value (a histogram bin axis):
+# for each member of A, aggregate B. Whitespace/newlines inside the braces vary.
+_FIXED_LOD_RE = re.compile(
+    r"^\s*\{\s*FIXED\s+\[(?P<a>[^\]]+)\]\s*:\s*"
+    r"(?P<agg>COUNTD|DISTINCTCOUNT|COUNT|SUM|AVG|AVERAGE|MIN|MAX)\s*"
+    r"\(\s*\[(?P<b>[^\]]+)\]\s*\)\s*\}\s*$", re.IGNORECASE | re.DOTALL)
+
+
+def _physical_column_for(caption: Optional[str], ir: Dict,
+                         physical_cols: set, _seen: Optional[set] = None) -> Optional[str]:
+    """Resolve a Tableau field caption to its underlying PHYSICAL column name.
+
+    A field may be physical itself, or a calc whose result is a physical column
+    (e.g. ``CY Customers`` = ``IF YEAR([Order Date]) = [Select Year] THEN
+    [Customer ID] END`` -> ``Customer ID``). The IF/CASE condition columns (the
+    date, the year parameter) are ALSO listed in ``dependsOn``, so the returned
+    column is taken from the THEN branch first -- never the first dependsOn entry,
+    which would wrongly pick ``Order Date``."""
+    if not caption:
+        return None
+    if caption in physical_cols:
+        return caption
+    _seen = _seen or set()
+    if caption in _seen:
+        return None
+    _seen.add(caption)
+    for f in ir.get("calculatedFields", []):
+        if f.get("caption") != caption:
+            continue
+        formula = f.get("formula") or ""
+        m = re.search(r"\bTHEN\s*\[([^\]]+)\]", formula, re.IGNORECASE)
+        if m and m.group(1) in physical_cols:
+            return m.group(1)
+        deps = f.get("dependsOn") or []
+        for dep in deps:
+            if dep in physical_cols:
+                return dep
+        for dep in deps:
+            r = _physical_column_for(dep, ir, physical_cols, _seen)
+            if r:
+                return r
+        return None
+    return None
+
+
+def synthesize_lod_bin_columns(ir: Dict, tables: List[Dict],
+                               fact: Optional[str]) -> List[Dict]:
+    """Author a calculated COLUMN for every ``{ FIXED [A]: AGG([B]) }`` dimension-
+    role LOD field (a per-entity grouping value plotted as a histogram bin axis).
+
+    Tableau's ``{ FIXED [Customer]: COUNTD([Order]) }`` gives each row the number
+    of distinct orders that customer placed -- a discrete value shown on the
+    category axis, with the chart counting customers per bin. In Power BI a
+    category axis MUST be a column (a measure cannot group), so this materialises
+    the LOD as a calculated column ``CALCULATE(<agg>(T[B]), ALLEXCEPT(T, T[A]))``.
+
+    The agent frequently mis-authors this LOD as an averaging MEASURE
+    (``DIVIDE([CY Orders],[CY Customers])``), which leaves the histogram with no
+    groupable axis -- the emitter then falls back to a high-cardinality key (e.g.
+    ``Order ID``) and plots one bar per order. Emitting the column deterministically
+    here (and dropping the shadow measure in ``merge``) makes the histogram bind
+    correctly regardless of what the agent produced. Generic for any workbook.
+    """
+    valid = {t.get("name") for t in tables if t.get("name")}
+    if not valid or not fact:
+        return []
+    physical_cols = {c.get("name") for c in ir.get("columns", []) if c.get("name")}
+    dec_like = {"tables": tables}
+    out: List[Dict] = []
+    for f in ir.get("calculatedFields", []):
+        if (f.get("role") or "").strip().lower() != "dimension":
+            continue
+        caption = f.get("caption")
+        m = _FIXED_LOD_RE.match(f.get("formula") or "")
+        if not caption or not m:
+            continue
+        a_phys = _physical_column_for(m.group("a"), ir, physical_cols)
+        b_phys = _physical_column_for(m.group("b"), ir, physical_cols)
+        fn = _LOD_BIN_AGG.get(m.group("agg").upper())
+        if not (a_phys and b_phys and fn):
+            continue
+        # ALLEXCEPT needs the grouping key and the aggregated column on the SAME
+        # table. Resolve each to its owning table the way the binder does; only
+        # emit when they agree (else fall back to the fact, which holds both for a
+        # denormalised source).
+        home_a = PB.entity_for_field(a_phys, fact, dec_like, ir)
+        home_b = PB.entity_for_field(b_phys, fact, dec_like, ir)
+        home = home_a if (home_a == home_b and home_a in valid) else fact
+        tok = home if re.fullmatch(r"\w+", home) else f"'{home}'"
+        agg_label = m.group("agg").upper()
+        out.append({
+            "table": home,
+            "name": caption,
+            "dax": (f"CALCULATE({fn}({tok}[{b_phys}]), "
+                    f"ALLEXCEPT({tok}, {tok}[{a_phys}]))"),
+            "dataType": "int64" if fn in ("DISTINCTCOUNT", "COUNT") else "double",
+            "formatString": "0" if fn in ("DISTINCTCOUNT", "COUNT") else None,
+            "description": (
+                f"Per-{a_phys} {agg_label} of {b_phys}, materialised as a "
+                f"calculated column so it can be a histogram category axis "
+                f"(Tableau LOD {{ FIXED [{m.group('a')}]: "
+                f"{agg_label}([{m.group('b')}]) }})."),
+        })
+    return out
+
+
 def merge(ir: Dict,
           dax_partial: Optional[Dict],
           schema_easy: Optional[Dict],
@@ -477,6 +651,21 @@ def merge(ir: Dict,
         if c.get("table") not in valid:
             c["table"] = fact
 
+    # Materialise FIXED-LOD per-entity grouping fields (e.g. { FIXED [Customer]:
+    # COUNTD([Order]) }) as deterministic calculated columns so a Tableau histogram
+    # binds to a real groupable category axis. The agent often mis-authors these as
+    # an averaging measure, which leaves the chart with no axis and mis-binds to a
+    # high-cardinality key. Add the column (if not already present) and DROP any
+    # measure of the same name so the field is a column only, never a duplicate Y.
+    lod_bins = synthesize_lod_bin_columns(ir, tables, fact)
+    if lod_bins:
+        existing = {_norm(c.get("name")) for c in calc_cols}
+        bin_names = {_norm(col.get("name")) for col in lod_bins}
+        for col in lod_bins:
+            if _norm(col.get("name")) not in existing:
+                calc_cols.append(col)
+        measures = [m for m in measures if _norm(m.get("name")) not in bin_names]
+
     # Harden every measure against the "CALCULATE in a True/False filter" error:
     # a measure reference inside a CALCULATE boolean-filter predicate is hoisted
     # into a VAR (plain scalar in the outer context). Done after re-homing so the
@@ -484,6 +673,12 @@ def merge(ir: Dict,
     measure_names = {m.get("name") for m in measures if m.get("name")}
     for m in measures:
         m["dax"] = _sanitize_calculate_filters(m.get("dax", ""), measure_names)
+
+    # Harden against the "cyclic reference" refresh error: drop any calculated
+    # column whose DAX references a measure (context transition makes the column
+    # depend on itself). The CY/PY-style logic such a column tried to express
+    # already lives in measures, which correctly react to the slicer.
+    calc_cols = strip_measure_referencing_calc_columns(calc_cols, measure_names)
 
     measures.sort(key=lambda m: (0 if m["source"] == "template" else 1,
                                  (m.get("name") or "").lower()))
@@ -496,7 +691,15 @@ def merge(ir: Dict,
     visual_decisions = list(agent_fragment.get("visualDecisions", []))
     field_parameters = list(agent_fragment.get("fieldParameters", []))
 
-    return {
+    # Overlay the screenshot (vision) layer: ``visualHints`` upgrade the visual
+    # INTENT (e.g. a KPI worksheet the agent guessed as 'card' is really a kpiStack
+    # tile the screenshot shows with a sparkline + ▲% vs PY) by PRECEDENCE — one
+    # decision per worksheet, never a duplicate visual. Bindings/data stay
+    # deterministic. Mismatches are recorded so the user can audit fidelity.
+    visual_decisions, discrepancies = SO.apply_visual_hints(
+        visual_decisions, agent_fragment.get("visualHints"), ir)
+
+    decisions = {
         "decisionsVersion": "1.0",
         "modelName": model,
         "tableStrategy": strategy,
@@ -507,6 +710,9 @@ def merge(ir: Dict,
         "visualDecisions": visual_decisions,
         "fieldParameters": field_parameters,
     }
+    if discrepancies:
+        decisions["visualFidelity"] = {"discrepancies": discrepancies}
+    return decisions
 
 
 def validate(decisions: Dict) -> List[str]:
@@ -570,6 +776,20 @@ def main(argv=None) -> int:
         json.dump(decisions, fh, indent=2, ensure_ascii=False)
     print(f"merge: wrote {out_path} "
           f"(tables={len(decisions['tables'])} measures={len(decisions['measures'])})")
+    vf = decisions.get("visualFidelity", {}).get("discrepancies") if isinstance(
+        decisions.get("visualFidelity"), dict) else None
+    if vf:
+        print(f"  screenshot overlay: {len(vf)} visual-intent change(s)")
+        for d in vf:
+            arrow = f"{d.get('from')} -> {d.get('to')}" if d.get("to") else "skipped"
+            # Console-safe: a screenshot note can carry non-cp1252 glyphs (▲, $, …);
+            # the full note is preserved in decisions.json visualFidelity, so the
+            # console line stays ASCII to never crash a Windows cp1252 pipe.
+            line = f"    - {d.get('worksheet')}: {arrow}"
+            try:
+                print(line)
+            except UnicodeEncodeError:
+                print(line.encode("ascii", "replace").decode())
 
     if args.skip_reconcile:
         return 0

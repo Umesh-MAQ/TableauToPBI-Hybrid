@@ -121,17 +121,38 @@ def classify(ir: Dict) -> Dict:
         if not caption:
             continue
         kind = field.get("suggestedDaxKind", "measure")
+        # A Tableau calc with role='dimension' is a row-level/grouping value (it lives
+        # on the rows/columns shelf as a discrete pill), NOT an aggregate. In Power BI
+        # that is a CALCULATED COLUMN, never a measure -- a {FIXED [Cust]: COUNTD([Ord])}
+        # used as a histogram bin axis, an IF returning a text bucket, etc. The IR has
+        # no suggestedDaxKind (so kind defaulted to "measure"); the authoritative signal
+        # is the Tableau role. Routing such a field to a measure makes downstream visuals
+        # unable to put it on a category axis (a measure can't group), which is exactly
+        # why the 'Nr of Orders per Customers' histogram mis-binds. Flag it for the agent.
+        role = (field.get("role") or "").strip().lower()
+        target_kind = "calculatedColumn" if role == "dimension" else "measure"
         name = map_dax.measure_name(caption)
-        is_det = kind == "measure" and name in det_names
+        # A dimension-role calc is never a deterministic measure (it is not a measure
+        # at all), so it always routes to the agent for calc-column authoring.
+        is_det = (target_kind == "measure" and kind == "measure"
+                  and name in det_names)
         route = "deterministic" if is_det else "agent"
         hint = None if is_det else _hint(field.get("formula", ""))
-        measures.append({"caption": caption, "route": route, "kind": kind, "hint": hint})
+        measures.append({"caption": caption, "route": route, "kind": kind,
+                         "targetKind": target_kind, "hint": hint})
         if not is_det:
             agent_measures.append({
                 "caption": caption,
                 "name": name,
                 "formula": field.get("formula", ""),
                 "kind": kind,
+                # targetKind tells the agent WHICH fragment section to author into:
+                # "calculatedColumn" -> calculatedColumns[] (group/bin axis fields),
+                # "measure" -> measures[]. Driven by the Tableau role, deterministic.
+                "targetKind": target_kind,
+                "role": field.get("role"),
+                "isLOD": bool(field.get("isLOD")),
+                "dependsOn": field.get("dependsOn") or [],
                 "hint": hint,
                 "dataType": field.get("dataType"),
             })

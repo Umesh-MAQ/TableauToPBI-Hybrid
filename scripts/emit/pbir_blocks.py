@@ -29,6 +29,29 @@ def color(hex_value: str) -> Dict:
     return {"solid": {"color": {"expr": {"Literal": {"Value": f"'{hex_value}'"}}}}}
 
 
+def opaque_color(hex_value: Optional[str], fallback: str = "#004263") -> str:
+    """Return a guaranteed-visible opaque ``#RRGGBB`` hex for a button fill.
+
+    A Power BI button fill/background MUST never be transparent or the button
+    renders as an invisible (all-white) tile. Tableau worksheet formatting often
+    yields a fully transparent mark colour (``#00000000``), and the auto-derived
+    theme adopted it as the button fill -- which made every show/hide and
+    navigation button disappear. This normalises any input to an opaque six-digit
+    hex, substituting ``fallback`` whenever the colour is missing, malformed, or
+    fully transparent (8-digit ``#AARRGGBB`` with alpha ``00``).
+    """
+    if not isinstance(hex_value, str):
+        return fallback
+    h = hex_value.strip().lstrip("#")
+    if len(h) not in (6, 8) or any(c not in "0123456789abcdefABCDEF" for c in h):
+        return fallback
+    if len(h) == 8:
+        if h[:2].lower() == "00":      # fully transparent -> unusable as a fill
+            return fallback
+        h = h[2:]                      # drop the alpha byte, keep the RGB
+    return "#" + h.lower()
+
+
 def _num(value) -> Dict:
     """Wrap a number as a PBIR double literal (e.g. 14 -> '14D')."""
     return {"expr": {"Literal": {"Value": f"{value}D"}}}
@@ -580,9 +603,17 @@ def nav_button_visual(name: str, pos: Dict, label: Optional[str],
     placing it under visual.objects makes the button render but do nothing. When
     target_page is None the button still renders (styled) but carries no action.
     """
+    # A transparent fill (e.g. a Tableau '#00000000' mark colour adopted by the
+    # auto-derived theme) renders the button as an invisible all-white tile, so
+    # force an opaque fill and frame it with a contrasting outline -- the button
+    # is then always visible regardless of the source theme or page background.
+    fill = opaque_color(fill)
     objects: Dict = {
-        "icon": [{"properties": {"shapeType": literal("Arrow")}}],
-        "outline": [{"properties": {"show": literal(False)}}],
+        "icon": [{"properties": {"shapeType": literal("Arrow"),
+                                 "lineColor": color(text_color)}}],
+        "outline": [{"properties": {"show": literal(True),
+                                    "lineColor": color(text_color),
+                                    "weight": _num(1)}}],
         "fill": [{"properties": {"show": literal(True), "fillColor": color(fill)}}],
         "text": [{"properties": {
             "show": literal(bool(label)),
@@ -617,9 +648,17 @@ def bookmark_button_visual(name: str, pos: Dict, label: Optional[str],
     visualContainerObjects.visualLink (type=Bookmark + bookmark id); putting it
     under visual.objects makes the button render but do nothing.
     """
+    # A transparent fill (e.g. a Tableau '#00000000' mark colour adopted by the
+    # auto-derived theme) renders the toggle button as an invisible all-white
+    # tile, so force an opaque fill, a contrasting icon glyph and a framing
+    # outline -- the button is always visible regardless of theme/page colour.
+    fill = opaque_color(fill)
     objects: Dict = {
-        "icon": [{"properties": {"shapeType": literal(icon)}}],
-        "outline": [{"properties": {"show": literal(False)}}],
+        "icon": [{"properties": {"shapeType": literal(icon),
+                                 "lineColor": color(text_color)}}],
+        "outline": [{"properties": {"show": literal(True),
+                                    "lineColor": color(text_color),
+                                    "weight": _num(1)}}],
         "fill": [{"properties": {"show": literal(True), "fillColor": color(fill)}}],
         "text": [{"properties": {
             "show": literal(bool(show_text and label)),
