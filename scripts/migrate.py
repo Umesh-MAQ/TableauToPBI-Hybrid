@@ -49,10 +49,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "twb"))
 sys.path.insert(0, os.path.join(HERE, "merge"))
+sys.path.insert(0, os.path.join(HERE, "dax"))
 import mark_infer as MI  # noqa: E402  (single source of truth for visual gating)
 import feature_audit as FA  # noqa: E402  (deterministic fidelity fingerprint)
 import merge_decisions as MD  # noqa: E402  (DAX safety escalation detector)
 import screenshot_overlay as SO  # noqa: E402  (dashboard screenshot discovery)
+import dax_cache as DC  # noqa: E402  (learned formula->DAX cache; written post-validation)
 
 PIPELINE = os.path.join(HERE, "pipeline.py")
 LOAD_CONST = os.path.join(HERE, "load_constitution.py")
@@ -719,6 +721,17 @@ def _finish_generate(analysis: str, decisions: str, odir: str,
     if not result.get("ok"):
         payload["failedStage"] = result.get("stage")
         payload["log"] = result.get("log", "")[-2000:]
+    else:
+        # The .pbip built and every validator was green: this is the only moment a
+        # formula->DAX mapping is known-good. Teach the cache the agent's solutions
+        # so identical calcs route as deterministic next time (zero AI cost).
+        learned = DC.record_from_run(odir)
+        if learned:
+            payload["learnedMeasures"] = learned
+        # Credit any generalized pattern that was reused this run (promotion signal).
+        reused = DC.bump_pattern_hits(odir)
+        if reused:
+            payload["reusedPatterns"] = reused
     write_result(odir, payload)
     _print_banner(payload)
     return 0 if result.get("ok") else 2

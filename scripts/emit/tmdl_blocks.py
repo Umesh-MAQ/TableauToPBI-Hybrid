@@ -163,6 +163,29 @@ def measure_block(m: Dict, seq: int) -> str:
     return "\n".join(lines)
 
 
+def _header_rename_step(columns: List[Dict], prev: str) -> Tuple[str, str]:
+    """Return (m_clause, new_prev) renaming raw CSV headers to logical names.
+
+    Table.PromoteHeaders yields columns under the file's raw header text, which can
+    carry leading/trailing whitespace (e.g. ' Sites ', ' Covaxin (Doses
+    Administered)'). Downstream WithDates/Typed steps and the model's sourceColumn
+    use the trimmed logical name (``c['name']``), so without this rename Power Query
+    fails with "the column 'Sites' of the table wasn't found". Mirrors the rename
+    already done by dim_partition/source_partition. No-op when every header already
+    equals its logical name. MissingField.Ignore keeps the refresh resilient.
+    """
+    renames = [(c["csv_name"], c["name"]) for c in columns
+               if c.get("csv_name") and c["csv_name"] != c["name"]]
+    if not renames:
+        return "", prev
+    pairs = ", ".join(f'{{"{src}", "{log}"}}' for src, log in renames)
+    clause = (
+        f",\n{TAB}{TAB}{TAB}{TAB}Renamed = Table.RenameColumns({prev}, "
+        f"{{{pairs}}}, MissingField.Ignore)"
+    )
+    return clause, "Renamed"
+
+
 def csv_partition(table: str, path: str, columns: List[Dict], delimiter: str = ",",
                   codepage: int = 65001) -> str:
     """Build an Import-mode CSV partition M block.
@@ -179,9 +202,22 @@ def csv_partition(table: str, path: str, columns: List[Dict], delimiter: str = "
     be parsed; the per-row form turns unparseable values into null and lets the
     rest of the table load. Long month-name dates like "September 9, 2019" parse
     under en-US, dd/MM/yyyy under en-GB — both are tried.
+
+    Numeric columns (integer/real) get the same error-tolerant treatment: a bulk
+    ``Int64.Type`` / ``type number`` cast raises a cell error on every value the
+    type inference (which samples only the first rows) did not see — a decimal in
+    an otherwise-integer column, or a stray text token like an age range "28-35".
+    Those error cells surface in Power BI as "errors in <column>". The per-row
+    ``try Number.FromText … otherwise null`` form nulls the unparseable values and
+    keeps the refresh green; integers are rounded back to Int64 so the model
+    column type is preserved.
     """
     date_cols = [c for c in columns if c.get("dataType") in ("date", "datetime")]
-    other_cols = [c for c in columns if c.get("dataType") not in ("date", "datetime")]
+    num_cols = [c for c in columns if c.get("dataType") in ("integer", "real")]
+    other_cols = [
+        c for c in columns
+        if c.get("dataType") not in ("date", "datetime", "integer", "real")
+    ]
     typed = ",\n".join(
         f'{TAB}{TAB}{TAB}{TAB}{{"{ c["name"]}", {_m_type(c["dataType"])}}}'
         for c in other_cols
@@ -193,6 +229,8 @@ def csv_partition(table: str, path: str, columns: List[Dict], delimiter: str = "
         f"{TAB}{TAB}{TAB}{TAB}Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars=true])"
     )
     prev = "Promoted"
+    rename_clause, prev = _header_rename_step(columns, prev)
+    steps += rename_clause
     if date_cols:
         date_transforms = ",\n".join(
             f'{TAB}{TAB}{TAB}{TAB}\t{{"{ c["name"]}", '
@@ -211,6 +249,22 @@ def csv_partition(table: str, path: str, columns: List[Dict], delimiter: str = "
             f"{TAB}{TAB}{TAB}{TAB}}})"
         )
         prev = "WithDates"
+    if num_cols:
+        num_transforms = ",\n".join(
+            f'{TAB}{TAB}{TAB}{TAB}\t{{"{ c["name"]}", '
+            + (
+                'each try Int64.From(Number.FromText(Text.From(_))) otherwise null, Int64.Type}'
+                if c.get("dataType") == "integer" else
+                'each try Number.FromText(Text.From(_)) otherwise null, type number}'
+            )
+            for c in num_cols
+        )
+        steps += (
+            f",\n{TAB}{TAB}{TAB}{TAB}WithNums = Table.TransformColumns({prev}, {{\n"
+            f"{num_transforms}\n"
+            f"{TAB}{TAB}{TAB}{TAB}}})"
+        )
+        prev = "WithNums"
     if typed:
         steps += (
             f",\n{TAB}{TAB}{TAB}{TAB}Typed = Table.TransformColumnTypes({prev}, {{\n{typed}\n"
@@ -334,6 +388,8 @@ def robust_csv_partition(
         f"{TAB}{TAB}{TAB}{TAB}Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars=true])"
     )
     prev = "Promoted"
+    rename_clause, prev = _header_rename_step(columns, prev)
+    steps += rename_clause
     if date_transforms:
         steps += (
             f",\n{TAB}{TAB}{TAB}{TAB}WithDates = Table.TransformColumns({prev}, {{\n"
@@ -461,6 +517,22 @@ def source_partition(table: str, source: Dict, columns: List[Dict]) -> str:
     """
     head, prev = _source_head(source.get("sourceType", ""), source, table)
     body = f"{TAB}{TAB}{TAB}let\n{head}"
+    # The connector navigates/promotes columns under their SOURCE names (the Excel
+    # header or DB column = the IR ``remoteName``). When the model's logical name
+    # differs (Tableau disambiguated e.g. customer_code -> "customer_code
+    # (customers)"), rename so the typed step and the TMDL sourceColumn resolve.
+    renames = [
+        (c["remoteName"], c["name"])
+        for c in columns
+        if c.get("remoteName") and c["remoteName"] != c["name"]
+    ]
+    if renames:
+        pairs = ", ".join(f'{{"{src}", "{log}"}}' for src, log in renames)
+        body += (
+            f",\n{TAB}{TAB}{TAB}{TAB}Renamed = Table.RenameColumns({prev}, "
+            f"{{{pairs}}}, MissingField.Ignore)"
+        )
+        prev = "Renamed"
     if columns:
         typed = ",\n".join(
             f'{TAB}{TAB}{TAB}{TAB}{TAB}{{"{c["name"]}", {_m_type(c.get("dataType", "string"))}}}'
@@ -539,10 +611,63 @@ def dim_partition(
         else ""
     )
     after_rename = "Renamed" if renames else "Promoted"
-    typed_pairs = ",\n".join(
-        f'{TAB}{TAB}{TAB}{TAB}\t{{"{c["name"]}", {_m_type(c.get("dataType", "string"))}}}'
-        for c in all_columns
-    )
+    # Error-tolerant typing (mirrors csv_partition): per-row try/otherwise null for
+    # dates and numbers so a stray unparseable value (a decimal in an integer
+    # column, a text token, an odd date) becomes null instead of a cell error that
+    # surfaces in Power BI as "errors in <column>". Remaining columns are text.
+    date_cols = [c for c in all_columns if c.get("dataType") in ("date", "datetime")]
+    num_cols = [c for c in all_columns if c.get("dataType") in ("integer", "real")]
+    other_cols = [
+        c for c in all_columns
+        if c.get("dataType") not in ("date", "datetime", "integer", "real")
+    ]
+    prev = after_rename
+    transform_steps = ""
+    if date_cols:
+        date_transforms = ",\n".join(
+            f'{TAB}{TAB}{TAB}{TAB}\t{{"{ c["name"]}", '
+            + (
+                'each try Date.FromText(_, "en-US") otherwise '
+                'try Date.FromText(_, "en-GB") otherwise null, type date}'
+                if c.get("dataType") == "date" else
+                'each try DateTime.FromText(_, "en-US") otherwise '
+                'try DateTime.FromText(_, "en-GB") otherwise null, type datetime}'
+            )
+            for c in date_cols
+        )
+        transform_steps += (
+            f"{TAB}{TAB}{TAB}{TAB}WithDates = Table.TransformColumns({prev}, {{\n"
+            f"{date_transforms}\n"
+            f"{TAB}{TAB}{TAB}{TAB}}}),\n"
+        )
+        prev = "WithDates"
+    if num_cols:
+        num_transforms = ",\n".join(
+            f'{TAB}{TAB}{TAB}{TAB}\t{{"{ c["name"]}", '
+            + (
+                'each try Int64.From(Number.FromText(Text.From(_))) otherwise null, Int64.Type}'
+                if c.get("dataType") == "integer" else
+                'each try Number.FromText(Text.From(_)) otherwise null, type number}'
+            )
+            for c in num_cols
+        )
+        transform_steps += (
+            f"{TAB}{TAB}{TAB}{TAB}WithNums = Table.TransformColumns({prev}, {{\n"
+            f"{num_transforms}\n"
+            f"{TAB}{TAB}{TAB}{TAB}}}),\n"
+        )
+        prev = "WithNums"
+    if other_cols:
+        typed_pairs = ",\n".join(
+            f'{TAB}{TAB}{TAB}{TAB}\t{{"{c["name"]}", {_m_type(c.get("dataType", "string"))}}}'
+            for c in other_cols
+        )
+        transform_steps += (
+            f"{TAB}{TAB}{TAB}{TAB}Typed = Table.TransformColumnTypes({prev}, {{\n"
+            f"{typed_pairs}\n"
+            f"{TAB}{TAB}{TAB}{TAB}}}),\n"
+        )
+        prev = "Typed"
     kref = (
         f'[#"{logical_key}"]'
         if any(ch in logical_key for ch in " '\"()")
@@ -557,10 +682,8 @@ def dim_partition(
         f'[Delimiter="{delimiter}", Encoding={codepage}, QuoteStyle=QuoteStyle.Csv]),\n'
         f"{TAB}{TAB}{TAB}{TAB}Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),\n"
         f"{rename_step}"
-        f"{TAB}{TAB}{TAB}{TAB}Typed = Table.TransformColumnTypes({after_rename}, {{\n"
-        f"{typed_pairs}\n"
-        f"{TAB}{TAB}{TAB}{TAB}}}),\n"
-        f"{TAB}{TAB}{TAB}{TAB}Filtered = Table.SelectRows(Typed, "
+        f"{transform_steps}"
+        f"{TAB}{TAB}{TAB}{TAB}Filtered = Table.SelectRows({prev}, "
         f'each {kref} <> null and Text.Trim(Text.From({kref})) <> ""),\n'
         f'{TAB}{TAB}{TAB}{TAB}Distinct = Table.Distinct(Filtered, {{"{logical_key}"}})\n'
         f"{TAB}{TAB}{TAB}in\n"

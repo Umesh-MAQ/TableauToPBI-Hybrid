@@ -267,6 +267,31 @@ class TestMerge(unittest.TestCase):
         decisions = MG.merge(ir, {}, S.build_star(ir), {})
         self.assertEqual(MG.validate(decisions), [])
 
+    def test_cache_source_measure_survives_merge_and_validates(self):
+        # A measure replayed from the learned DAX cache carries source="cache".
+        # The merge must preserve that source (not coerce it to "llm") and the
+        # decisions schema must accept it, otherwise every cache-hit migration
+        # would hard-fail at the merge validation step.
+        ir = _single_flat_ir()
+        dax_partial = {"measures": [{
+            "table": "demo", "name": "Cached Total", "dax": "SUM(demo[Amount])",
+            "formatString": "0", "displayFolder": "Base Measures",
+            "description": None, "source": "cache"}]}
+        decisions = MG.merge(ir, dax_partial, S.build_star(ir), {})
+        by_name = {m["name"]: m for m in decisions["measures"]}
+        self.assertEqual(by_name["Cached Total"]["source"], "cache")
+        self.assertEqual(MG.validate(decisions), [])
+
+    def test_decisions_schema_allows_cache_source(self):
+        # Lock the enum independently of whether jsonschema is installed: the
+        # measure.source enum in the contract must list "cache".
+        schema_path = os.path.join(SCRIPTS, "contracts", "decisions_schema.json")
+        with open(schema_path, encoding="utf-8-sig") as fh:
+            schema = json.load(fh)
+        enum = (schema["properties"]["measures"]["items"]["properties"]
+                ["source"]["enum"])
+        self.assertIn("cache", enum)
+
     def test_calc_column_referencing_measure_is_dropped(self):
         # A calc column whose DAX references a MEASURE causes a "cyclic reference"
         # at refresh (context transition). The merge must strip it deterministically

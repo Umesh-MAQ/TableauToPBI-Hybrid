@@ -274,6 +274,15 @@ def _repoint_dax_table(dax: str, old: str, new: str) -> str:
     dax = re.sub(rf"'{re.escape(old)}'\s*\[", f"{new_tok}[", dax)
     # Unquoted form: Old[  ->  new_tok[  (word-bounded, not already quoted)
     dax = re.sub(rf"(?<![\w'])({re.escape(old)})\s*\[", f"{new_tok}[", dax)
+    # Bare TABLE references (the token is the table itself, not a column qualifier)
+    # e.g. COUNTROWS ( Old ), SUMX ( Old, ... ), or a lone 'Old Name'. The Tableau
+    # 'Number of Records' row-count measure is COUNTROWS(<placeholder table>); when
+    # re-homed onto the real fact this bare reference must move too, else it points
+    # at a table that no longer exists and Power BI reports a cyclic/blocked
+    # evaluation. The qualifier forms above already consumed any ``Old[`` so only
+    # genuine bare references remain here.
+    dax = re.sub(rf"'{re.escape(old)}'(?!\s*\[)", new_tok, dax)
+    dax = re.sub(rf"(?<![\w'\[]){re.escape(old)}(?![\w]|\s*\[)", new_tok, dax)
     return dax
 
 
@@ -294,14 +303,20 @@ def merge_partial_measures(decisions: Dict, analysis_path: str) -> Dict:
         return decisions
     measures = decisions.setdefault("measures", [])
     existing = {_norm_name(m.get("name", "")) for m in measures}
+    # A name already materialised as a calculated column (e.g. an agent-authored
+    # Tableau bin/grouping field) must not be re-added here as a bare-column measure
+    # -- the deterministic translator passes such dimension-role fields through as
+    # invalid bare-column measures. The calculated column is the resolved artifact.
+    calc_col_names = {_norm_name(c.get("name", ""))
+                      for c in decisions.get("calculatedColumns", [])}
     table_names = {t.get("name") for t in decisions.get("tables", [])}
     fact = next((t["name"] for t in decisions.get("tables", [])
                  if t.get("role") == "fact"), None)
     added = 0
     for m in det:
         key = _norm_name(m.get("name", ""))
-        if not key or key in existing:
-            continue  # agent already authored this measure -> keep theirs
+        if not key or key in existing or key in calc_col_names:
+            continue  # agent already authored this measure/column -> keep theirs
         home = m.get("table") if m.get("table") in table_names else (fact or m.get("table"))
         if home not in table_names:
             continue  # no valid host table -> let reconciliation flag it instead
@@ -562,12 +577,47 @@ def _columns_for(table: Dict, ir: Dict, decisions: Dict) -> List[Dict]:
             cols = ([c for c in cols if c.get("datasource") == preferred]
                     + [c for c in cols if c.get("datasource") != preferred])
     cols = _dedupe_columns(cols)
+    # Scope a non-CSV table (multi-sheet Excel / multi-table DB) to the columns of
+    # its own physical sheet/table. The CSV path scopes via the physical header in
+    # _reconcile_with_csv; non-CSV sources are not probed, so without this every
+    # table sharing the one datasource would receive ALL of its columns, collapsing
+    # a star schema into N identical wide tables.
+    cols = _scope_by_physical_table(table, ir, cols)
     # Anchor non-date tables on the physical CSV header: this ADDS physical
     # columns Tableau omitted, DROPS invented logical ones, and scopes a federated
     # fact to its own CSV (superset of main's probe fact-scoping). [from HEAD]
     if table.get("role") != "date":
         cols = _reconcile_with_csv(table, ir, cols)
     return cols
+
+
+def _scope_by_physical_table(table: Dict, ir: Dict, cols: List[Dict]) -> List[Dict]:
+    """Restrict a non-CSV fact/dim table to the columns of its own physical table.
+
+    A multi-sheet Excel workbook (or multi-table relational extract) exposes every
+    sheet/table through ONE Tableau datasource, so filtering columns by datasource
+    alone leaves each model table with the full column set. The IR tags every
+    column with its owning ``physicalTable``; match the model table to a physical
+    table (by its ``sourceTable``/``sourceSheet`` override, else its name, with a
+    trailing Excel ``$`` ignored) and keep only that table's columns. No-op for
+    CSV (handled by the physical-header reconcile) and single-table sources.
+    """
+    if table.get("role") not in ("fact", "dim"):
+        return cols
+    src = (table.get("sourceFile") or "")
+    if str(src).lower().endswith(".csv"):
+        return cols
+    phys = ir.get("physicalTables", [])
+    if len(phys) <= 1:
+        return cols
+    want = table.get("sourceTable") or table.get("sourceSheet") or table.get("name")
+    want_norm = _normalize_name(re.sub(r"\$$", "", str(want)))
+    phys_norms = {_normalize_name(pt.get("name", "")) for pt in phys}
+    if want_norm not in phys_norms:
+        return cols
+    scoped = [c for c in cols
+              if _normalize_name(str(c.get("physicalTable") or "")) == want_norm]
+    return scoped or cols
 
 
 def _reconcile_with_csv(table: Dict, ir: Dict, ir_cols: List[Dict]) -> List[Dict]:
@@ -596,9 +646,17 @@ def _reconcile_with_csv(table: Dict, ir: Dict, ir_cols: List[Dict]) -> List[Dict
         match = ir_by_key.get(key)
         if match:
             col = dict(match)
-            col["name"] = raw_name
+            # Keep the canonical (trimmed) IR name as the MODEL column name so every
+            # DAX reference and report binding -- which all use the trimmed name --
+            # resolves. Carry the actual CSV header (which may have leading/trailing
+            # whitespace, e.g. ' Sites ', ' Covaxin (Doses Administered)') as csv_name
+            # so the partition renames the promoted header to the logical name before
+            # typing it; otherwise the WithDates/Typed steps reference a column that
+            # does not exist on the promoted table ('the column X wasn't found').
+            col["csv_name"] = raw_name
         else:
-            col = {"name": raw_name, "dataType": B.infer_csv_type(rows, idx),
+            col = {"name": raw_name, "csv_name": raw_name,
+                   "dataType": B.infer_csv_type(rows, idx),
                    "role": "dimension", "format": None}
         out.append(col)
     return out
