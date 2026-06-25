@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
+import zipfile
 from typing import Iterable, Optional
 
 # Tableau connection class -> resolved IR sourceType
@@ -38,7 +39,20 @@ DATATYPE_MAP = {
 
 
 def load_twb(path: str) -> ET.Element:
-    """Parse a .twb file and return the root <workbook> element."""
+    """Parse a .twb/.twbx file and return the root <workbook> element.
+
+    A .twbx is a zip archive that bundles the .twb (and data extracts). When
+    given one, read the single inner .twb member instead of parsing the binary
+    zip as XML.
+    """
+    if path.lower().endswith(".twbx") or zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path) as zf:
+            twb_members = [n for n in zf.namelist() if n.lower().endswith(".twb")]
+            if not twb_members:
+                raise ValueError(f"No .twb found inside archive: {path}")
+            with zf.open(twb_members[0]) as fh:
+                tree = ET.parse(fh)
+        return tree.getroot()
     tree = ET.parse(path)
     return tree.getroot()
 

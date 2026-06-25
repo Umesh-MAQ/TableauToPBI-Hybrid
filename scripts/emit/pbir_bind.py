@@ -94,6 +94,31 @@ def measure_list(decisions: Dict) -> List[str]:
     return [m["name"] for m in decisions.get("measures", [])]
 
 
+def measure_home_map(decisions: Dict) -> Dict[str, str]:
+    """measure name -> the table the measure is DEFINED on.
+
+    Measures are model-global in DAX, but a PBIR field reference encodes the
+    table (``Expression.SourceRef.Entity``). Power BI resolves a measure only when
+    that entity is the measure's home table, so a binding that names the fact for
+    a measure that actually lives on a dim renders as a broken visual ("Can't
+    display this visual"). This map lets the report emitter name the right table.
+    """
+    return {
+        m["name"]: m.get("table")
+        for m in decisions.get("measures", [])
+        if m.get("name") and m.get("table")
+    }
+
+
+def measure_entity(measure: Optional[str], decisions: Dict,
+                   default_entity: str) -> str:
+    """Return the table a measure is defined on, falling back to ``default_entity``
+    (the visual's primary/fact entity) for unknown or table-less measures."""
+    if not measure:
+        return default_entity
+    return measure_home_map(decisions).get(measure) or default_entity
+
+
 def display_units_map(decisions: Dict, ir: Dict) -> Dict[str, int]:
     """Measure name -> Power BI Display-units divisor (1 / 1000 / 1_000_000 / …)
     derived from each measure's Tableau number format. Reuses the model emitter so
@@ -358,11 +383,18 @@ def _owned_columns(table: Dict, ir: Dict) -> Set[str]:
         dt = table.get("datatable") or {}
         own |= {c["name"] for c in dt.get("columns", [])}
         return own
-    if table.get("sourceFile"):
+    sf = str(table.get("sourceFile") or "")
+    if sf.lower().endswith(".csv"):
         probe = ET._probe_for_table(table, ir)
         if probe and probe.get("columns"):
             return {c["name"] for c in probe["columns"]}
-    return {c["name"] for c in ir.get("columns", []) if c.get("datasource") == src}
+        return {c["name"] for c in ir.get("columns", []) if c.get("datasource") == src}
+    # Non-CSV (multi-sheet Excel / multi-table DB): a single datasource exposes
+    # every sheet's columns, so scope by physical table just like emit_tmdl does,
+    # otherwise each dim would claim the whole datasource and dim fields mis-bind
+    # back to the fact ("column does not exist on table <fact>").
+    ds_cols = [c for c in ir.get("columns", []) if c.get("datasource") == src]
+    return {c["name"] for c in ET._scope_by_physical_table(table, ir, ds_cols)}
 
 
 def entity_for_field(field: Optional[str], default_entity: str,

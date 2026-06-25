@@ -56,7 +56,7 @@
           "formatString": { "type": ["string", "null"] },
           "displayFolder": { "type": ["string", "null"] },
           "description": { "type": ["string", "null"] },
-          "source": { "type": "string", "enum": ["template", "llm"], "description": "template = from map_dax.py, llm = agent authored" }
+          "source": { "type": "string", "enum": ["template", "llm", "cache"], "description": "template = from map_dax.py, llm = agent authored, cache = replayed from the learned formula->DAX cache (dax_cache.py)" }
         }
       }
     },

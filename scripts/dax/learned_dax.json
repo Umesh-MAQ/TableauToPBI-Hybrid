@@ -1,0 +1,36 @@
+{
+  "cacheVersion": "2.0",
+  "entries": {
+    "IF [currency] == \"USD\" THEN [sales_amount] * 76 ELSE [sales_amount] END": {
+      "columnsUsed": [
+        "currency",
+        "sales_amount"
+      ],
+      "daxTemplate": "SUMX(transactions, IF({T}[currency] = \"USD\", {T}[sales_amount] * 76, {T}[sales_amount]))",
+      "formatString": "#,0",
+      "formula": "IF [currency] == \"USD\" THEN [sales_amount] * 76 ELSE [sales_amount] END",
+      "hits": 0,
+      "source": "llm"
+    }
+  },
+  "patterns": {
+    "IF [{1}] == \"USD\" THEN [{2}] * 76 ELSE [{2}] END": {
+      "arity": 2,
+      "daxTemplate": "SUMX(transactions, IF({T}[{1}] = \"USD\", {T}[{2}] * 76, {T}[{2}]))",
+      "example": {
+        "fields": [
+          "currency",
+          "sales_amount"
+        ]
+      },
+      "formatString": "#,0",
+      "formula": "IF [{1}] == \"USD\" THEN [{2}] * 76 ELSE [{2}] END",
+      "hits": 0,
+      "placeholderTypes": {
+        "1": "string",
+        "2": "integer"
+      },
+      "source": "llm"
+    }
+  }
+}

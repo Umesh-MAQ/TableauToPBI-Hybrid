@@ -11,7 +11,17 @@ worksheet for the LLM/decisions layer instead of silently guessing a table.
 """
 from __future__ import annotations
 
+import re
 from typing import Dict, Optional
+
+# Tableau date-part / temporal tokens. A field whose name contains one of these
+# (after splitting on non-alphanumerics) is treated as a time axis -- e.g. a
+# continuous SUM(year) pill that the parser counted among the values is really
+# the horizontal axis of a trend line, not a second measure.
+_TEMPORAL_TOKENS = frozenset({
+    "year", "quarter", "qtr", "month", "week", "day", "date",
+    "weekday", "hour", "minute", "second", "yr",
+})
 
 # Unambiguous Tableau mark class -> Power BI visualType.
 MARK_MAP = {
@@ -55,6 +65,43 @@ def _ambiguous_flat_table(ws: Dict) -> bool:
     return placed >= 2 and not has_value
 
 
+def is_temporal_name(name: object) -> bool:
+    """True when a field name reads as a date/time part (year, month, date...)."""
+    if not name:
+        return False
+    tokens = re.split(r"[^a-z0-9]+", str(name).lower())
+    return any(tok in _TEMPORAL_TOKENS for tok in tokens)
+
+
+def has_temporal_axis(ws: Dict) -> bool:
+    """True when a temporal field sits on the column/row shelves (a time axis).
+
+    A real date dimension on the axis (categoryDateLevel) also counts.
+    """
+    if ws.get("categoryDateLevel") is not None:
+        return True
+    for field in (ws.get("cols") or []) + (ws.get("rows") or []):
+        if is_temporal_name(field):
+            return True
+    return False
+
+
+def is_geographic_map(ws: Dict) -> bool:
+    """True when Tableau auto-plotted the worksheet on a map.
+
+    The unambiguous signal is Tableau's auto-generated geographic axes:
+    ``Latitude (generated)`` on the row shelf and ``Longitude (generated)`` on the
+    column shelf. Tableau emits these only when a sheet is drawn as a map (a geo
+    role field is on Detail/Color), so their presence is a high-confidence map
+    signature even when the mark class is 'Automatic'. Without this the sheet falls
+    through to the generic dim+measure branch and is mis-rendered as a bar chart.
+    """
+    shelves = [str(f) for f in (ws.get("rows") or []) + (ws.get("cols") or [])]
+    has_lat = any("latitude (generated)" in f.lower() for f in shelves)
+    has_lon = any("longitude (generated)" in f.lower() for f in shelves)
+    return has_lat and has_lon
+
+
 def infer_visual_type(ws: Dict) -> Optional[str]:
     """Derive a Power BI visualType from a worksheet's Tableau mark FACTS.
 
@@ -62,6 +109,9 @@ def infer_visual_type(ws: Dict) -> Optional[str]:
     """
     mark_class = ws.get("markClass") or "Automatic"
     if mark_class in MAP_MARKS:
+        return "map"
+    # Tableau auto-generated Lat/Long axes => a map, even for an 'Automatic' mark.
+    if is_geographic_map(ws):
         return "map"
     if mark_class == "Text":
         # A Text mark is normally a value/detail table, but a multi-dimension
@@ -92,6 +142,16 @@ def infer_visual_type(ws: Dict) -> Optional[str]:
             return "card"
         if enc.get("color") and enc.get("size") and enc.get("text"):
             return "treemap"
+        # A field placed on BOTH the column and row shelves is a 2-D plot, never a
+        # scalar card -- even when the parser aggregated a continuous axis field
+        # (e.g. SUM(year)) and counted it among the values, leaving dimensions
+        # empty. A genuine KPI card carries its measure only via the text encoding
+        # and leaves both shelves empty. A temporal axis here makes it a trend
+        # line; any other 2-measure X/Y is ambiguous -> route to the agent.
+        if n_dim == 0 and (ws.get("cols") and ws.get("rows")):
+            if has_temporal_axis(ws):
+                return "lineChart"
+            return None
         if n_dim == 0 and n_val >= 1:
             return "card"
         if n_val >= 2 and n_dim >= 1:

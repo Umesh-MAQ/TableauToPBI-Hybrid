@@ -450,6 +450,100 @@ def combo_visual(name: str, pos: Dict, category: Dict,
     return {"$schema": VC_SCHEMA, "name": name, "position": pos, "visual": visual}
 
 
+def scatter_visual(name: str, pos: Dict, x_value: Dict, y_value: Dict,
+                   category: Optional[Dict] = None, title: Optional[str] = None,
+                   theme: Optional[Dict] = None, size: Optional[Dict] = None,
+                   single_color: Optional[str] = None,
+                   tooltips: Optional[List[Dict]] = None) -> Dict:
+    """Build a scatterChart visual.json dict (Tableau Circle mark, two measures).
+
+    ``x_value`` / ``y_value`` are the two plotted measures (the X and Y axes);
+    ``category`` (Details) creates one point per dimension member; ``size``
+    optionally drives bubble size. Reproduces a Tableau scatter where each mark is
+    a dimension member positioned by two aggregated measures.
+    """
+    qs: Dict = {
+        "Category": ({"projections": [binding_projection(category)]}
+                     if category else {"projections": []}),
+        "X": {"projections": [binding_projection(x_value)]},
+        "Y": {"projections": [binding_projection(y_value)]},
+    }
+    if size:
+        qs["Size"] = {"projections": [binding_projection(size)]}
+    if tooltips:
+        qs["Tooltips"] = {"projections": [binding_projection(t) for t in tooltips]}
+    query = {"queryState": qs}
+    objects: Dict = {}
+    fg = (theme or {}).get("foreground")
+    cat_ax: Dict = {"show": literal(True), "labelDisplayUnits": _display_units(x_value)}
+    val_ax: Dict = {"show": literal(True), "labelDisplayUnits": _display_units(y_value)}
+    if fg:
+        cat_ax["labelColor"] = color(fg)
+        cat_ax["titleColor"] = color(fg)
+        val_ax["labelColor"] = color(fg)
+        val_ax["titleColor"] = color(fg)
+    objects["categoryAxis"] = [{"properties": cat_ax}]
+    objects["valueAxis"] = [{"properties": val_ax}]
+    if single_color:
+        objects["dataPoint"] = [{"properties": {
+            "fill": color(single_color), "showAllDataPoints": literal(True)}}]
+    if category:
+        legend = {"show": literal(True)}
+        if fg:
+            legend["labelColor"] = color(fg)
+        objects["legend"] = [{"properties": legend}]
+    visual = {"visualType": "scatterChart", "query": query, "objects": objects,
+              "visualContainerObjects": container_objects(title, theme)}
+    return {"$schema": VC_SCHEMA, "name": name, "position": pos, "visual": visual}
+
+
+def gantt_visual(name: str, pos: Dict, category: Dict, duration: Dict,
+                 start: Optional[Dict] = None, title: Optional[str] = None,
+                 theme: Optional[Dict] = None,
+                 tooltips: Optional[List[Dict]] = None) -> Dict:
+    """Build a Gantt-style timeline as a native horizontal stacked bar chart.
+
+    Power BI core has no Gantt visual, so the faithful native equivalent is a
+    horizontal stacked bar: a transparent ``start`` offset segment positions each
+    task and the visible ``duration`` segment draws the bar — the standard
+    "Gantt via stacked bar" technique. ``category`` is the task/row dimension. When
+    no ``start`` offset measure is available the bar simply encodes duration per
+    task (which always loads as a plain horizontal bar).
+    """
+    y_proj: List[Dict] = []
+    if start:
+        y_proj.append(binding_projection(start))
+    y_proj.append(binding_projection(duration))
+    qs: Dict = {
+        "Category": {"projections": [binding_projection(category)]},
+        "Y": {"projections": y_proj},
+    }
+    if tooltips:
+        qs["Tooltips"] = {"projections": [binding_projection(t) for t in tooltips]}
+    query = {"queryState": qs}
+    objects: Dict = {}
+    # Make the leading start-offset segment blend into the canvas so only the
+    # duration bar reads as the visible task. With no themed background, white on
+    # the default white page is effectively invisible.
+    if start:
+        base_fill = (theme or {}).get("visualBackground") \
+            or (theme or {}).get("pageBackground") or "#FFFFFF"
+        objects["dataPoint"] = [{
+            "properties": {"fill": color(base_fill)},
+            "selector": {"metadata": f"{start['entity']}.{start['prop']}"},
+        }]
+    fg = (theme or {}).get("foreground")
+    cat_ax: Dict = {"show": literal(True)}
+    if fg:
+        cat_ax["labelColor"] = color(fg)
+        cat_ax["titleColor"] = color(fg)
+    objects["categoryAxis"] = [{"properties": cat_ax}]
+    objects["labels"] = [{"properties": {"show": literal(False)}}]
+    visual = {"visualType": "stackedBarChart", "query": query, "objects": objects,
+              "visualContainerObjects": container_objects(title, theme)}
+    return {"$schema": VC_SCHEMA, "name": name, "position": pos, "visual": visual}
+
+
 def pie_visual(name: str, pos: Dict, category: Dict, value: Dict,
                title: Optional[str] = None, theme: Optional[Dict] = None,
                donut: bool = False, series_colors: Optional[Dict] = None,

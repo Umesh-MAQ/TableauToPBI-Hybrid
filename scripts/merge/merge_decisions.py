@@ -77,6 +77,12 @@ def _repoint_dax_table(dax: str, old: str, new: str) -> str:
     new_tok = new if re.fullmatch(r"\w+", new) else f"'{new}'"
     dax = re.sub(rf"'{re.escape(old)}'\s*\[", f"{new_tok}[", dax)
     dax = re.sub(rf"(?<![\w'])({re.escape(old)})\s*\[", f"{new_tok}[", dax)
+    # Bare table references (no trailing column qualifier), e.g.
+    # ``COUNTROWS ( Old )`` or ``COUNTROWS('Old')`` — the row-count template
+    # passes the placeholder model name as a whole-table argument. Rewrite the
+    # quoted and unquoted forms so the table arg resolves to the real fact table.
+    dax = re.sub(rf"'{re.escape(old)}'(?!\s*\[)", new_tok, dax)
+    dax = re.sub(rf"(?<![\w'\[]){re.escape(old)}(?![\w]|\s*\[)", new_tok, dax)
     return dax
 
 
@@ -370,7 +376,7 @@ def strip_measure_referencing_calc_columns(
 
 def _normalize_measure(m: Dict, default_source: str) -> Dict:
     src = m.get("source", default_source)
-    if src not in ("template", "llm"):
+    if src not in ("template", "llm", "cache"):
         src = "template" if src == "template" else "llm"
     return {
         "table": m.get("table"),
@@ -679,6 +685,15 @@ def merge(ir: Dict,
     # depend on itself). The CY/PY-style logic such a column tried to express
     # already lives in measures, which correctly react to the slicer.
     calc_cols = strip_measure_referencing_calc_columns(calc_cols, measure_names)
+
+    # A field materialised as a calculated column (an agent-authored Tableau bin /
+    # grouping field, or a synthesized LOD bin) must NOT also exist as a like-named
+    # measure. The deterministic translator can pass a dimension-role bin field
+    # through as a bare-column measure (invalid DAX referencing a column on the
+    # wrong table); the calculated column is the resolved artifact and wins. Drop
+    # any measure whose name collides with a calculated column.
+    calc_col_names = {_norm(c.get("name")) for c in calc_cols if c.get("name")}
+    measures = [m for m in measures if _norm(m.get("name")) not in calc_col_names]
 
     measures.sort(key=lambda m: (0 if m["source"] == "template" else 1,
                                  (m.get("name") or "").lower()))

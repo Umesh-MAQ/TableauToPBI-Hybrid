@@ -1368,6 +1368,32 @@ class TestVisualInference(unittest.TestCase):
             {"markClass": "Automatic", "dimensions": ["a", "b"], "values": []}),
             "tableEx")
 
+    def test_continuous_date_axis_is_line_not_card(self):
+        # REGRESSION: a continuous SUM(year) pill on the column shelf is the time
+        # axis of a trend line, not a second measure. The parser counts it among
+        # the values with dimensions=[], so the old `n_dim==0 and n_val>=1 -> card`
+        # rule mislabeled "Revenue by Year" / "Profit Trend" as KPI cards. A field
+        # on BOTH shelves with a temporal axis must resolve to a lineChart.
+        self.assertEqual(MI.infer_visual_type(
+            {"markClass": "Automatic", "dimensions": [], "rows": ["Revenue"],
+             "cols": ["year"], "values": ["year", "Revenue"]}), "lineChart")
+        # Two measures on both shelves (e.g. multiple metrics over a year axis)
+        # still a line because the axis is temporal.
+        self.assertEqual(MI.infer_visual_type(
+            {"markClass": "Automatic", "dimensions": [],
+             "rows": ["Revenue", "Profit Margin %"], "cols": ["year"],
+             "values": ["year", "Revenue", "Profit Margin %"]}), "lineChart")
+        # A genuine KPI card leaves BOTH shelves empty (value via text encoding):
+        # it must stay a card.
+        self.assertEqual(MI.infer_visual_type(
+            {"markClass": "Automatic", "dimensions": [], "rows": [], "cols": [],
+             "values": ["Revenue"]}), "card")
+        # Both shelves occupied but NON-temporal axis (two measures X/Y) is a real
+        # ambiguous scatter/combo shape -> route to the agent, not a card.
+        self.assertIsNone(MI.infer_visual_type(
+            {"markClass": "Automatic", "dimensions": [], "rows": ["Profit"],
+             "cols": ["Sales"], "values": ["Sales", "Profit"]}))
+
     def test_multi_measure_is_ambiguous_not_table(self):
         # Several measures over a dimension is genuinely ambiguous: it must route
         # to the agent (None), NOT silently default to a table.
