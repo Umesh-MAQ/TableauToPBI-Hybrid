@@ -207,51 +207,63 @@ def topn_filter_config(entity: str, category_prop: str, n: int,
     }]}
 
 
-def projection(entity: str, prop: str, active: bool = True) -> Dict:
-    """A single column projection for a visual query."""
+def projection(entity: str, prop: str, active: bool = True,
+               display: Optional[str] = None) -> Dict:
+    """A single column projection for a visual query.
+
+    ``display`` overrides the column header (nativeQueryRef) so a matrix can show a
+    Tableau-friendly caption instead of the raw model column name.
+    """
     return {
         "field": {"Column": {
             "Expression": {"SourceRef": {"Entity": entity}}, "Property": prop}},
-        "queryRef": f"{entity}.{prop}", "nativeQueryRef": prop, "active": active,
+        "queryRef": f"{entity}.{prop}", "nativeQueryRef": display or prop,
+        "active": active,
     }
 
 
-def measure_projection(entity: str, prop: str, active: bool = True) -> Dict:
+def measure_projection(entity: str, prop: str, active: bool = True,
+                       display: Optional[str] = None) -> Dict:
     """A single measure projection for a visual query."""
     return {
         "field": {"Measure": {
             "Expression": {"SourceRef": {"Entity": entity}}, "Property": prop}},
-        "queryRef": f"{entity}.{prop}", "nativeQueryRef": prop, "active": active,
+        "queryRef": f"{entity}.{prop}", "nativeQueryRef": display or prop,
+        "active": active,
     }
 
 
 def aggregation_projection(entity: str, prop: str, func: int,
-                           label: str = "Count", active: bool = True) -> Dict:
+                           label: str = "Count", active: bool = True,
+                           display: Optional[str] = None) -> Dict:
     """An inline-aggregation projection (Power BI QueryAggregateFunction ``func``).
 
     Used when a chart plots an aggregation of a column that has no named model
     measure (e.g. ``COUNTD([show_id])`` on a fact table with no measures). Wrapping
     the column in an Aggregation makes Power BI compute the aggregate instead of
-    trying to plot the raw column, so the visual renders a real number.
+    trying to plot the raw column, so the visual renders a real number. ``display``
+    overrides the column header (else "<label> of <prop>").
     """
     return {
         "field": {"Aggregation": {
             "Expression": {"Column": {
                 "Expression": {"SourceRef": {"Entity": entity}}, "Property": prop}},
             "Function": func}},
-        "queryRef": f"{label}({entity}.{prop})", "nativeQueryRef": f"{label} of {prop}",
+        "queryRef": f"{label}({entity}.{prop})",
+        "nativeQueryRef": display or f"{label} of {prop}",
         "active": active,
     }
 
 
 def binding_projection(b: Dict) -> Dict:
-    """Build a projection from a {entity, prop, isMeasure?, agg?} binding dict."""
+    """Build a projection from a {entity, prop, isMeasure?, agg?, displayName?}."""
+    disp = b.get("displayName")
     if b.get("agg") is not None:
         return aggregation_projection(b["entity"], b["prop"], b["agg"],
-                                      b.get("aggLabel") or "Count")
+                                      b.get("aggLabel") or "Count", display=disp)
     if b.get("isMeasure"):
-        return measure_projection(b["entity"], b["prop"])
-    return projection(b["entity"], b["prop"])
+        return measure_projection(b["entity"], b["prop"], display=disp)
+    return projection(b["entity"], b["prop"], display=disp)
 
 
 def slicer_visual(name: str, pos: Dict, entity: str, prop: str,

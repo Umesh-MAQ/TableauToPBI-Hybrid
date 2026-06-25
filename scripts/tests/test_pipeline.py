@@ -2388,6 +2388,147 @@ class TestSynthesizeLodBinColumns(unittest.TestCase):
             MD.synthesize_lod_bin_columns(ir, [{"name": "F", "role": "fact"}], "F"), [])
 
 
+class TestPivotMatrixLayout(unittest.TestCase):
+    """A Tableau text-table / cross-tab (a multi-level ROW hierarchy + measure value
+    columns) must become a Power BI MATRIX -- row dimensions as the hierarchy, the
+    measures as cell values bound to their OWNING table -- not a flat detail table
+    (scrambled column order) nor a mis-inferred map."""
+
+    def _ir(self):
+        return {"columns": [
+            {"name": "licensed_beds", "datasource": "S"},
+            {"name": "department_name", "datasource": "S"},
+            {"name": "department_level_of_care_group", "datasource": "S"},
+            {"name": "encounter_count", "datasource": "E"},
+            {"name": "parent_location_name", "datasource": "E"},
+            {"name": "location_name", "datasource": "E"},
+        ]}
+
+    def _decisions(self):
+        return {
+            "tables": [
+                {"name": "Census", "role": "fact", "sourceDatasource": "S"},
+                {"name": "EDCensus", "role": "dim", "sourceDatasource": "E"},
+            ],
+            "calculatedColumns": [
+                {"name": "Entity", "table": "Census",
+                 "dax": "SWITCH(Census[parent], \"x\", \"y\")"},
+                {"name": "Licensed", "table": "Census",
+                 "dax": "FORMAT ( Census[licensed_beds], \"0\" )"},
+            ],
+            "measures": [
+                {"name": "% Occ.", "table": "Census", "dax": "DIVIDE(1, 2)"},
+                {"name": "Sum of encounter_count", "table": "EDCensus",
+                 "dax": "SUM(EDCensus[encounter_count])"},
+            ],
+        }
+
+    def test_text_crosstab_becomes_matrix_rows_and_values(self):
+        ir, dec = self._ir(), self._decisions()
+        cols = PBB.column_names(ir)
+        ws = {"markClass": "Text",
+              "rows": ["Entity", "Level Of Care (group)", "department_name",
+                       "Licensed"],
+              "cols": ["Measure Names"], "values": ["% Occ."],
+              "measures": [{"field": "% Occ.", "agg": "SUM", "column": "calc_x"}]}
+        layout = PBB.pivot_matrix_layout(ws, ir, "Census", {"% Occ."}, cols, dec)
+        self.assertIsNotNone(layout)
+        # 'Level Of Care (group)' resolves to its physical column; all 3 dims kept.
+        self.assertEqual([r["prop"] for r in layout["rows"]],
+                         ["Entity", "department_level_of_care_group", "department_name"])
+        self.assertTrue(all(r["entity"] == "Census" for r in layout["rows"]))
+        # FORMAT(table[col]) label -> SUM(base column) with the friendly header.
+        lic = layout["values"][0]
+        self.assertEqual(lic["prop"], "licensed_beds")
+        self.assertEqual(lic["agg"], 0)
+        self.assertEqual(lic["displayName"], "Licensed")
+        self.assertEqual(lic["entity"], "Census")
+        # The % ratio measure folds in from the values shelf.
+        occ = layout["values"][-1]
+        self.assertEqual(occ["prop"], "% Occ.")
+        self.assertTrue(occ["isMeasure"])
+
+    def test_single_dimension_stays_flat(self):
+        ir, dec = self._ir(), self._decisions()
+        cols = PBB.column_names(ir)
+        ws = {"markClass": "Text", "rows": ["Entity"], "cols": [],
+              "values": ["% Occ."],
+              "measures": [{"field": "% Occ.", "agg": "SUM", "column": "calc_x"}]}
+        self.assertIsNone(
+            PBB.pivot_matrix_layout(ws, ir, "Census", {"% Occ."}, cols, dec))
+
+    def test_measure_pill_binds_to_owning_table(self):
+        """A cross-table aggregated pill (SUM(encounter_count)) maps to its model
+        measure on the table that actually owns it, never the report's primary
+        fact -- the fix for the binding-integrity cross-table warning."""
+        ir, dec = self._ir(), self._decisions()
+        cols = PBB.column_names(ir)
+        ws = {"markClass": "Polygon",
+              "rows": ["parent_location_name", "location_name", "encounter_count"],
+              "cols": [], "values": ["encounter_count"],
+              "measures": [{"field": "encounter_count", "agg": "SUM",
+                            "column": "encounter_count"}]}
+        layout = PBB.pivot_matrix_layout(
+            ws, ir, "Census", {"% Occ.", "Sum of encounter_count"}, cols, dec)
+        self.assertIsNotNone(layout)
+        self.assertEqual([r["prop"] for r in layout["rows"]],
+                         ["parent_location_name", "location_name"])
+        val = layout["values"][0]
+        self.assertEqual(val["prop"], "Sum of encounter_count")
+        self.assertTrue(val["isMeasure"])
+        self.assertEqual(val["entity"], "EDCensus")
+
+
+class TestTrendTemporalAxis(unittest.TestCase):
+    """A Tableau line/area trend places the continuous date pill on the COLUMNS
+    shelf (the X axis) and the metric on rows. The parser can mislabel the date as
+    a MAX(date) value pill -> a datetime on the Y axis, which crashes Power BI's
+    cartesian renderer ('categoryIdentities is not a function'). The emitter must
+    detect such a temporal value and keep dates off the value axis."""
+
+    def _dec(self):
+        return {"measures": [
+            {"name": "Max of EXTRACT_DATETIME", "table": "T",
+             "dax": "MAX(T[EXTRACT_DATETIME])"},
+            {"name": "Daily Census Tooltip", "table": "T",
+             "dax": "(SUM ( T[occupied_beds] )+SUM ( T[unavailable_beds] ))"
+                    "/DISTINCTCOUNT ( T[extract_date] )"},
+            {"name": "% Occ.", "table": "T",
+             "dax": "DIVIDE ( SUM ( T[occupied_beds] ), SUM ( T[staffed_beds] ) )"},
+        ]}
+
+    def test_max_of_date_measure_is_temporal(self):
+        vb = {"entity": "T", "prop": "Max of EXTRACT_DATETIME", "isMeasure": True}
+        self.assertTrue(EP._is_temporal_value(vb, {"EXTRACT_DATETIME"}, self._dec()))
+
+    def test_inline_date_aggregation_is_temporal(self):
+        vb = {"entity": "T", "prop": "extract_date", "agg": 3}
+        self.assertTrue(EP._is_temporal_value(vb, {"extract_date"}, self._dec()))
+
+    def test_real_metric_is_not_temporal(self):
+        vb = {"entity": "T", "prop": "% Occ.", "isMeasure": True}
+        self.assertFalse(EP._is_temporal_value(vb, {"EXTRACT_DATETIME", "extract_date"},
+                                               self._dec()))
+
+    def test_measure_for_pill_anchors_to_exact_aggregation(self):
+        """A SUM([occupied_beds]) pill must NOT bind to a composite measure that
+        merely CONTAINS that aggregation (the loose-substring bug that plotted the
+        'Daily Census Tooltip' ratio on a '# Occupied' trend)."""
+        ws = {"measures": [{"field": "occupied_beds", "agg": "SUM",
+                            "column": "occupied_beds"}]}
+        # Only the composite measure exists -> no exact match -> None (inline agg).
+        self.assertIsNone(PBB.measure_for_pill(
+            ws, self._dec(), {"Daily Census Tooltip", "% Occ."}))
+        # The exact SUM measure is preferred when present.
+        dec = self._dec()
+        dec["measures"].append({"name": "Sum of occupied_beds", "table": "T",
+                                "dax": "SUM(T[occupied_beds])"})
+        self.assertEqual(
+            PBB.measure_for_pill(ws, dec,
+                                 {"Daily Census Tooltip", "Sum of occupied_beds"}),
+            "Sum of occupied_beds")
+
+
 class TestTextTableColumns(unittest.TestCase):
     """A Tableau text-table mark (only a Text pill, no rows/cols/values) must emit a
     single-column table of the text-encoded dimension — Detail/Tooltip dims in the
