@@ -151,10 +151,14 @@ def measure_for_pill(ws: Optional[Dict], decisions: Dict, mset: Set[str]) -> Opt
     column = p.get("column") or p.get("field")
     if not fn or not column:
         return None
+    # The measure's DAX must BE exactly this aggregation -- anchored, not merely
+    # contained. A loose substring match wrongly binds a composite measure (e.g. a
+    # ratio `(SUM([occupied_beds])+SUM([unavailable_beds]))/DISTINCTCOUNT(...)`)
+    # to a plain `SUM([occupied_beds])` pill, plotting the wrong metric.
     pat = re.compile(
-        rf"\b{fn}\s*\(\s*[^()\[\]]*\[\s*{re.escape(column)}\s*\]\s*\)", re.I)
+        rf"^\s*{fn}\s*\(\s*[^()\[\]]*\[\s*{re.escape(column)}\s*\]\s*\)\s*$", re.I)
     for m in decisions.get("measures", []):
-        if m.get("name") in mset and pat.search(m.get("dax") or ""):
+        if m.get("name") in mset and pat.match((m.get("dax") or "").strip()):
             return m["name"]
     return None
 
@@ -707,6 +711,157 @@ def slicer_dimension(ws: Optional[Dict], ir: Dict, cols: Set[str]) -> Optional[s
         return None
     n = CP.distinct_count(path, dim)
     return dim if 2 <= n <= SLICER_MAX_CARDINALITY else None
+
+
+# A calc column defined as FORMAT(table[col], "...") is a measure DISPLAY label
+# (a numeric value rendered as text for a Tableau text table), NOT a hierarchy
+# dimension. The wrapped base column is recovered so the matrix can SUM it.
+_FORMAT_LABEL_RX = re.compile(
+    r"^\s*FORMAT\s*\(\s*[^()\[\]]*\[(?P<col>[^\]]+)\]", re.IGNORECASE)
+
+
+def _calc_col_map(decisions: Optional[Dict]) -> Dict[str, Dict]:
+    return {c.get("name"): c for c in (decisions or {}).get("calculatedColumns", [])
+            if c.get("name")}
+
+
+def _format_label_base(name: str, calc_map: Dict[str, Dict]) -> Optional[str]:
+    """If ``name`` is a calc column ``FORMAT(table[col], ...)`` return the wrapped
+    base column (a measure-display label); else None."""
+    c = calc_map.get(name)
+    if not c:
+        return None
+    m = _FORMAT_LABEL_RX.match((c.get("dax") or "").strip())
+    return m.group("col") if m else None
+
+
+def _measure_entity(name: Optional[str], decisions: Dict, default: str) -> str:
+    """Owning table of a model measure (so a cross-table measure binds to the
+    table it actually lives on, not the report's primary fact)."""
+    for m in (decisions or {}).get("measures", []):
+        if m.get("name") == name:
+            return m.get("table") or default
+    return default
+
+
+def _resolve_dim_column(field: str, cols: Set[str], ir: Dict,
+                        decisions: Optional[Dict]) -> Optional[str]:
+    """Resolve a row/col shelf dimension caption to its real model column, tolerant
+    of Tableau group/bin/copy suffixes (``Level Of Care (group)`` ->
+    ``department_level_of_care_group``)."""
+    rc = _resolve_model_column(field, cols, ir, decisions)
+    if rc:
+        return rc
+    base = re.sub(r"\s*\((?:group|bin|copy|\d+)\)\s*$", "", field, flags=re.I).strip()
+    if base and base != field:
+        rc = _resolve_model_column(base, cols, ir, decisions)
+        if rc:
+            return rc
+        nf = _norm_col(base)
+        owned: Set[str] = set()
+        for t in (decisions or {}).get("tables", []):
+            owned |= _owned_columns(t, ir)
+        hits = [c for c in owned if nf and nf in _norm_col(c)]
+        if len(hits) == 1:
+            return hits[0]
+    return None
+
+
+def pivot_matrix_layout(ws: Optional[Dict], ir: Dict, entity: str,
+                        mset: Set[str], cols: Set[str],
+                        decisions: Optional[Dict]) -> Optional[Dict]:
+    """Detect a Tableau cross-tab / text table and return matrix bindings.
+
+    A Tableau text-table worksheet (Text mark, or a Polygon/Square mark that the
+    mark heuristic mis-routes) that stacks two or more DIMENSION levels on the rows
+    shelf and carries one or more measure value columns is faithfully a Power BI
+    MATRIX -- row dimensions form the drillable hierarchy and the measures fill the
+    cells. The flat ``tableEx`` fallback instead emits columns in the IR's
+    unordered ``dimensions`` order (helper/threshold columns first, the real
+    hierarchy last) and drops grouped levels; a mis-inferred choropleth map binds
+    the first dimension as a location. Both lose the report's structure.
+
+    Returns ``{"rows": [...], "columns": [...], "values": [...]}`` of fully
+    resolved binding dicts, or None when the worksheet is not a multi-level pivot
+    (so single-dimension detail tables / value lists stay tableEx). Generic across
+    workbooks -- driven only by shelf facts and the model's own columns/measures.
+    """
+    if not ws:
+        return None
+    calc_map = _calc_col_map(decisions)
+    mnames = _measure_names(decisions)
+    pills = {(m.get("field")): m for m in (ws.get("measures") or []) if m.get("field")}
+
+    def _classify(field):
+        if not isinstance(field, str) or field in ("Measure Names", "Measure Values"):
+            return (None, None)
+        base = base_field(field)
+        # FORMAT(table[col]) measure-display label -> SUM(base col).
+        blab = _format_label_base(field, calc_map)
+        if blab:
+            return ("value", {"entity": entity_for_field(blab, entity, decisions, ir),
+                              "prop": blab, "agg": agg_func("SUM"),
+                              "aggLabel": "Sum", "displayName": field})
+        # A named model measure (incl. % ratios) -> bind that measure directly.
+        if field in mnames or base in mnames:
+            mname = field if field in mnames else base
+            return ("value", {"entity": _measure_entity(mname, decisions, entity),
+                              "prop": mname, "isMeasure": True})
+        # An aggregated measure pill (SUM(encounter_count)) -> the model measure
+        # built from that aggregation ("Sum of encounter_count"), else an inline
+        # aggregation so the cell still computes a real number.
+        pill = pills.get(field)
+        if pill and pill.get("agg"):
+            col = pill.get("column") or pill.get("field")
+            lbl = agg_label(pill.get("agg"))
+            cand = f"{lbl} of {col}" if lbl else None
+            if cand and cand in mnames:
+                return ("value", {"entity": _measure_entity(cand, decisions, entity),
+                                  "prop": cand, "isMeasure": True})
+            func = agg_func(pill.get("agg"))
+            if func is not None and col:
+                return ("value", {"entity": entity_for_field(col, entity, decisions, ir),
+                                  "prop": col, "agg": func,
+                                  "aggLabel": lbl or "Count", "displayName": field})
+            return (None, None)
+        # Otherwise a real dimension column -> a hierarchy level.
+        rc = _resolve_dim_column(field, cols, ir, decisions)
+        if rc:
+            return ("dim", rc)
+        return (None, None)
+
+    rows: List[Dict] = []
+    columns: List[Dict] = []
+    values: List[Dict] = []
+    seen_dim: Set[str] = set()
+    seen_val: Set[str] = set()
+
+    def _add_value(b):
+        key = _norm_col(b.get("prop"))
+        if key and key not in seen_val:
+            seen_val.add(key)
+            values.append(b)
+
+    for shelf, sink in (("rows", rows), ("cols", columns)):
+        for f in ws.get(shelf) or []:
+            kind, payload = _classify(f)
+            if kind == "dim":
+                if payload not in seen_dim:
+                    seen_dim.add(payload)
+                    sink.append({"entity": entity_for_field(payload, entity, decisions, ir),
+                                 "prop": payload})
+            elif kind == "value":
+                _add_value(payload)
+    # Value pills carried only on the Text/colour encoding (e.g. '% Occ.') are not
+    # on a shelf; fold them in from the worksheet's declared values.
+    for v in ws.get("values") or []:
+        kind, payload = _classify(v)
+        if kind == "value":
+            _add_value(payload)
+
+    if len(rows) >= 2 and values:
+        return {"rows": rows, "columns": columns or None, "values": values}
+    return None
 
 
 def table_columns(ws: Optional[Dict], ir: Dict, entity: str,

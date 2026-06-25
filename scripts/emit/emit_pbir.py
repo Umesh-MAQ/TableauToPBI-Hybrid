@@ -150,6 +150,42 @@ def visual_decision(ws_name: str, decisions: Dict) -> Dict:
     return {}
 
 
+def _agent_decided(ws_name: str, decisions: Dict) -> bool:
+    """True when the agent explicitly chose a visual type for this worksheet, so a
+    deterministic mark-based promotion (e.g. text-table -> matrix) must not override
+    it."""
+    return any(vd.get("worksheet") == ws_name
+               for vd in decisions.get("visualDecisions", []))
+
+
+# A MAX/MIN aggregation over a date/datetime column -- Tableau's continuous time
+# axis pill (e.g. ``MAX([EXTRACT_DATETIME])`` placed on the columns shelf), never a
+# plottable Y metric.
+_DATE_AGG_RX = re.compile(
+    r"\b(?:MAX|MIN)\s*\(\s*[^()\[\]]*\[(?P<col>[^\]]+)\]\s*\)", re.IGNORECASE)
+
+
+def _is_temporal_value(valbind: Optional[Dict], dcols: set,
+                       decisions: Optional[Dict]) -> bool:
+    """True when a cartesian value binding actually plots a DATE/DATETIME axis
+    (a ``MAX``/``MIN`` of a date column, or an inline aggregation of one). Such a
+    value is Tableau's time axis mis-routed onto Y; rendering a datetime on the
+    value axis crashes Power BI's cartesian visual (``categoryIdentities`` error)."""
+    if not valbind:
+        return False
+    prop = valbind.get("prop")
+    if not prop:
+        return False
+    if valbind.get("isMeasure"):
+        for m in (decisions or {}).get("measures", []):
+            if m.get("name") == prop:
+                mm = _DATE_AGG_RX.search(m.get("dax") or "")
+                return bool(mm and mm.group("col") in dcols)
+        return False
+    # Inline aggregation pill straight off a date column.
+    return prop in dcols
+
+
 # Tableau-friendly aliases mapped to the concrete Power BI cartesian visualType.
 CHART_TYPE_MAP = {
     "columnChart": "clusteredColumnChart",
@@ -623,6 +659,24 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
     if vtype == "treemap" and not vd.get("category") and _is_crosstab_ws(ws, cols):
         vtype = "matrix"
 
+    # A Tableau text-table / cross-tab worksheet (a multi-level ROW hierarchy with
+    # measure value columns -- e.g. Entity > Site > Level Of Care > Department x
+    # Licensed, Staffed, Occupied, ...) is faithfully a Power BI MATRIX, not a flat
+    # detail table nor a choropleth map. The flat ``tableEx`` fallback emits columns
+    # in the IR's unordered ``dimensions`` order (threshold/helper columns first,
+    # the real hierarchy last) and drops grouped levels; a Polygon/Filled-Map mark
+    # mis-infers a map when the sheet carries no geographic field. Only fires for
+    # the deterministic fallbacks (no agent visual decision) so agent-chosen charts
+    # and genuine single-location maps are untouched, and only when the worksheet
+    # has >=2 stacked row dimensions (a real hierarchy worth a matrix).
+    if vtype in ("tableEx", "filledMap", "map") and not _agent_decided(ws_name, decisions) \
+            and not vd.get("tableColumns") and not vd.get("kpiStack"):
+        pivot = B.pivot_matrix_layout(ws, ir, entity, mset, cols, decisions)
+        if pivot:
+            vd = {**vd, "rows": pivot["rows"], "columns": pivot.get("columns"),
+                  "values": pivot["values"]}
+            vtype = "matrix"
+
     def value_bind() -> Dict:
         v = vd.get("value")
         if v and v in mset:
@@ -810,6 +864,31 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
                 catbind = {"entity": fp["name"], "prop": fp["name"]}
             else:
                 catbind = B.category_binding(ws, entity, cols, ir, decisions)
+        # Temporal-axis correction: when the resolved Y value is really a date/time
+        # axis (MAX/MIN of a date column -- Tableau puts the continuous date pill on
+        # the columns shelf of a trend chart), rebinding it onto Y both plots a
+        # meaningless aggregated date AND crashes Power BI's cartesian renderer
+        # (``categoryIdentities is not a function``). Move the date to the category
+        # (X) axis and plot the worksheet's first real numeric measure on Y instead.
+        if not vd.get("value") and _is_temporal_value(valbind, B.date_cols(ir), decisions):
+            pills = (ws.get("measures") or []) if ws else []
+            dcols = B.date_cols(ir)
+            real_pill = next((p for p in pills
+                              if (p.get("column") or p.get("field")) not in dcols
+                              and B.agg_func(p.get("agg")) is not None), None)
+            date_col = next(((p.get("column") or p.get("field")) for p in pills
+                             if (p.get("column") or p.get("field")) in dcols), None)
+            if real_pill and date_col:
+                rp_ws = {**ws, "measures": [real_pill]}
+                nm = B.measure_for_pill(rp_ws, decisions, mset)
+                new_val = (_with_units({"entity": entity, "prop": nm, "isMeasure": True})
+                           if nm else B.pill_agg_binding(rp_ws, entity, cols, decisions, ir))
+                if new_val:
+                    if not vd.get("category"):
+                        catbind = {"entity": B.entity_for_field(date_col, entity,
+                                                                decisions, ir),
+                                   "prop": date_col}
+                    valbind = new_val
         series = vd.get("series")
         seriesbind = ({"entity": B.entity_for_field(series, entity, decisions, ir),
                        "prop": series} if series else None)
@@ -893,8 +972,12 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         def _bind(spec):
             if isinstance(spec, dict):
                 ent = spec.get("entity") or B._field_entity(spec.get("prop"), decisions, ir)
-                return {"entity": ent, "prop": spec["prop"],
-                        "isMeasure": spec.get("isMeasure", spec.get("prop") in mset)}
+                out = {"entity": ent, "prop": spec["prop"],
+                       "isMeasure": spec.get("isMeasure", spec.get("prop") in mset)}
+                for k in ("agg", "aggLabel", "displayName"):
+                    if spec.get(k) is not None:
+                        out[k] = spec[k]
+                return out
             ent = entity if spec in mset else B._field_entity(spec, decisions, ir)
             return {"entity": ent, "prop": spec, "isMeasure": spec in mset}
         # Deterministic fallback when no agent decision: rows/cols from the
