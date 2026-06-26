@@ -291,11 +291,13 @@ def clean_page_full(img, page_h: float, page_w: float = 0.0):
     agree); otherwise it falls back to ``page_px_height / page_h``.
 
     ``complete`` means the WHOLE page height was captured (not clipped at the
-    viewport edge). Rather than relying on sentinel pixels appearing *below* the
-    page — which never happens when Fit-to-Page makes the page fill the canvas
-    height — completeness is judged by ASPECT RATIO: a page clipped at the bottom
-    has a pixel rectangle wider (relative to its height) than the logical page,
-    so ``px_w/px_h <= (page_w/page_h) * 1.06`` reliably indicates a full capture.
+    viewport fold). The reliable signal is a SENTINEL (magenta outspace) margin
+    BELOW the page inside the canvas viewport: a fully-fit page is letter-/pillar-
+    boxed by the outspace on every side, whereas a page clipped at the fold runs
+    straight to the bottom edge of the canvas with no outspace beneath it. An
+    aspect-ratio match alone is unreliable here — a 1700-wide page clipped at the
+    fold has almost the same pixel aspect as a genuinely widened page — so we
+    require the bottom margin to be present.
     """
     rect = find_page_by_sentinel(img)
     if rect is None:
@@ -309,13 +311,40 @@ def clean_page_full(img, page_h: float, page_w: float = 0.0):
         return None
     if page_w and page_w > 0:
         scale = px_w / float(page_w)
-        logical_aspect = page_w / float(page_h)
-        complete = (px_w / float(px_h)) <= logical_aspect * 1.06
     else:
         scale = px_h / float(page_h)
-        complete = True
+    complete = _has_bottom_margin(img, rect)
     page_img = _neutralize_sentinel(img.crop(rect))
     return page_img, scale, complete
+
+
+def _has_bottom_margin(img, rect, band: int = 14) -> bool:
+    """True when magenta outspace appears just BELOW the page rectangle.
+
+    A complete (fully-fit) capture has the page surrounded by the sentinel
+    outspace, so a band immediately under ``rect``'s bottom edge — but still
+    inside the canvas — is dominated by sentinel pixels. A page clipped at the
+    viewport fold instead runs to the canvas bottom edge, so that band is either
+    off-image or non-sentinel. Robust to small monitors where the bottom margin
+    is only a few percent of the page height.
+    """
+    if Image is None or img is None or not rect:
+        return False
+    W, H = img.size
+    pl, pt, pr, pb = rect
+    y0 = pb + 2
+    y1 = min(H, pb + 2 + band)
+    if y0 >= H or y1 - y0 < 3:
+        return False                      # no room below ⇒ clipped at the fold
+    px = img.load()
+    step_x = max(1, (pr - pl) // 200)
+    sentinel = total = 0
+    for y in range(y0, y1):
+        for x in range(pl, pr, step_x):
+            total += 1
+            if _is_sentinel(px[x, y]):
+                sentinel += 1
+    return total > 0 and (sentinel / total) >= 0.6
 
 
 

@@ -26,6 +26,8 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import os
+import glob
+import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -65,6 +67,37 @@ def _resolve_twb(art) -> str:
     return fallback
 
 
+# --------------------------------------------------------------------------- #
+# fresh-capture bookkeeping
+# --------------------------------------------------------------------------- #
+# EVERY validation run regenerates REAL screenshots from both desktop apps. A
+# run always deletes the previous pipeline-generated captures first so Tableau
+# and Power BI Desktop are relaunched and every pane is recaptured from scratch —
+# a saved image is never reused across runs.
+def _clear_auto_captures(screens_dir: str) -> int:
+    """Delete the previous run's captures so validation regenerates fresh from
+    both desktop apps.
+
+    Removes every pipeline capture: the per-page renders/meta
+    (``page_*_tableau.png`` / ``page_*_powerbi.png`` + ``.json``) and the
+    per-visual panes (``<key>_tableau.png`` / ``<key>_powerbi.png``). These are
+    all reproducible by relaunching Tableau + Power BI Desktop, so a clean run is
+    safe and runs unconditionally on every validation / refinement.
+    """
+    if not os.path.isdir(screens_dir):
+        return 0
+    removed = 0
+    for pat in ("*_tableau.png", "*_powerbi.png",
+                "page_*_powerbi*.json", "page_*_tableau*.json"):
+        for f in glob.glob(os.path.join(screens_dir, pat)):
+            try:
+                os.remove(f)
+                removed += 1
+            except OSError:
+                pass
+    return removed
+
+
 def _capture_powerbi(art, visuals, filters) -> int:
     """Capture REAL Power BI report pages from the .pbip via Power BI Desktop.
 
@@ -88,28 +121,12 @@ def _capture_powerbi(art, visuals, filters) -> int:
     if not os.path.isfile(pbip):
         return 0
 
-    # Skip the (slow) Desktop relaunch when every pane already has a capture.
+    # Always relaunch Power BI Desktop and recapture every page from the live
+    # report — no previously-saved page or pane image is ever reused.
     screens_dir = SS.ensure_dir(art.out_dir)
-    keys = [r["screenshotKey"] for r in visuals] + [r["screenshotKey"] for r in filters]
-    keys = [k for k in keys if k]
-    have = sum(1 for k in keys
-               if os.path.isfile(os.path.join(screens_dir, f"{k}_powerbi.png")))
-    if keys and have == len(keys):
-        print(f"  Power BI panes already present for all {len(keys)} key(s) — "
-              "reusing existing captures (delete a *_powerbi.png to refresh).")
-        return have
-
-    # Reuse already-captured page images if present (e.g. only the per-key
-    # assignment changed): this avoids relaunching Power BI Desktop. Page files
-    # are named ``page_<norm>_powerbi.png``; we map them back to page names.
-    pages = _existing_page_captures(art, PC, screens_dir)
-    if pages:
-        print(f"  reusing {len(pages)} existing Power BI page capture(s) "
-              "(delete page_*_powerbi.png to force a fresh Desktop capture).")
-    else:
-        print("  launching Power BI Desktop to capture real report page(s) — "
-              "this can take a minute (set PBI_CAPTURE=0 to skip)…")
-        pages = PC.capture_report(art.out_dir, pbip, art.model_name)
+    print("  launching Power BI Desktop to capture real report page(s) — "
+          "this can take a minute (set PBI_CAPTURE=0 to skip)…")
+    pages = PC.capture_report(art.out_dir, pbip, art.model_name)
     if not pages:
         print("  Power BI capture unavailable this run; panes left as "
               "placeholders (drop <key>_powerbi.png in to supply them).")
@@ -131,27 +148,48 @@ def _capture_powerbi(art, visuals, filters) -> int:
             return default_png
         return norm_pages.get(PC._norm(page_name), default_png)
 
-    # cache of clean page image + logical→pixel scale, keyed by png path
+    # cache of capture layers keyed by png path: each entry is a list of
+    # (clean_page_image, logical→pixel scale, max_logical_y) ordered
+    # highest-resolution first, so a visual is cropped from the sharpest layer
+    # that still contains it.
     page_cache: dict = {}
 
     def _load_page(png_path):
         if png_path in page_cache:
             return page_cache[png_path]
-        img = scale = None
-        if Image is not None and png_path and os.path.isfile(png_path):
+        layers = []
+        meta = os.path.splitext(png_path)[0] + ".json"
+        layer_specs = None
+        primary_scale = None
+        if os.path.isfile(meta):
+            try:
+                with open(meta, encoding="utf-8") as fh:
+                    data = json.load(fh)
+                primary_scale = data.get("scale")
+                layer_specs = data.get("layers")
+            except (OSError, json.JSONDecodeError):
+                layer_specs = None
+        if Image is not None and layer_specs:
+            base_dir = os.path.dirname(png_path)
+            for spec in layer_specs:
+                lp = os.path.join(base_dir, spec.get("image", ""))
+                if not os.path.isfile(lp):
+                    continue
+                try:
+                    limg = Image.open(lp).convert("RGB")
+                except OSError:
+                    continue
+                layers.append((limg, spec.get("scale"), spec.get("maxY")))
+        elif Image is not None and png_path and os.path.isfile(png_path):
+            # legacy single-layer meta (no "layers" list)
             try:
                 img = Image.open(png_path).convert("RGB")
             except OSError:
                 img = None
-            meta = os.path.splitext(png_path)[0] + ".json"
-            if os.path.isfile(meta):
-                try:
-                    with open(meta, encoding="utf-8") as fh:
-                        scale = json.load(fh).get("scale")
-                except (OSError, json.JSONDecodeError):
-                    scale = None
-        page_cache[png_path] = (img, scale)
-        return img, scale
+            if img is not None:
+                layers.append((img, primary_scale, None))
+        page_cache[png_path] = layers
+        return layers
 
     pos_by_name = {v["name"]: v for v in art.emitted_visuals}
 
@@ -168,14 +206,24 @@ def _capture_powerbi(art, visuals, filters) -> int:
         if os.path.isfile(dst):
             continue  # never overwrite a user-supplied capture
         src = _png_for(page)
-        img, scale = _load_page(src)
+        layers = _load_page(src)
         # Visual-by-visual only: crop just this visual out of the clean page
-        # image. If the visual cannot be isolated, leave a placeholder rather
-        # than substituting the whole page (which is not a one-to-one match).
+        # image, choosing the HIGHEST-resolution layer that still contains the
+        # whole visual (max_logical_y >= visual bottom). If the visual cannot be
+        # isolated, leave a placeholder rather than substituting the whole page.
         vis = pos_by_name.get(vname) if vname else None
         crop_img = None
-        if CROP is not None and img is not None and scale and vis:
-            crop_img = CROP.crop_visual(img, scale, vis["position"])
+        if CROP is not None and vis and layers:
+            pos = vis["position"]
+            v_bottom = float(pos.get("y", 0)) + float(pos.get("height", 0))
+            for limg, lscale, lmaxy in layers:
+                if not lscale:
+                    continue
+                if lmaxy is not None and v_bottom > lmaxy + 1:
+                    continue  # visual clipped in this (sharper) layer
+                crop_img = CROP.crop_visual(limg, lscale, pos)
+                if crop_img is not None:
+                    break
         if crop_img is not None:
             crop_img.save(dst)
             cropped += 1
@@ -185,32 +233,94 @@ def _capture_powerbi(art, visuals, filters) -> int:
     return cropped
 
 
-def _existing_page_captures(art, PC, screens_dir) -> dict:
-    """Map report page names to already-captured ``page_<norm>_powerbi.png``.
+def _capture_tableau(art, visuals, filters) -> int:
+    """Capture REAL per-worksheet screenshots from Tableau Desktop.
 
-    Returns ``{page_name: png_path}`` for pages whose capture already exists, so
-    the per-key assignment can be redone without relaunching Power BI Desktop.
+    Opens each worksheet maximized in Tableau Desktop (presentation mode) and
+    captures it at full-screen resolution — the genuine Tableau render with live
+    data, far sharper than the ~192px thumbnail embedded in the .twb and free of
+    dashboard clipping. Disabled with ``TAB_CAPTURE=0``. Best-effort: if Tableau
+    Desktop isn't installed, a connection/sign-in prompt blocks it, or this isn't
+    Windows, the affected worksheets fall back to the embedded thumbnail.
+
+    Each captured worksheet image is assigned to every visual/filter that maps to
+    it as ``<key>_tableau.png`` (never overwriting an existing file). Returns the
+    number of ``<key>_tableau.png`` files written.
     """
-    page_names = PC._report_pages(art.out_dir, art.model_name)
-    out = {}
-    for name in page_names:
-        path = os.path.join(screens_dir, f"page_{PC._norm(name)}_powerbi.png")
-        if os.path.isfile(path):
-            out[name] = path
-    return out
+    if os.environ.get("TAB_CAPTURE", "1") == "0":
+        print("  (TAB_CAPTURE=0 — skipping Tableau Desktop capture)")
+        return 0
+    try:
+        import tableau_capture as TC  # noqa: E402
+    except ImportError:
+        return 0
+
+    twb = _resolve_twb(art)
+    if not twb:
+        return 0
+
+    screens = SS.ensure_dir(art.out_dir)
+    # worksheet name -> keys still needing a Tableau capture
+    ws_keys: dict = {}
+    for rec in (visuals + filters):
+        key = rec.get("screenshotKey")
+        ws = rec.get("tableauWorksheet") or rec.get("worksheet")
+        if not key or not ws or ws == "—":
+            continue
+        if os.path.isfile(os.path.join(screens, f"{key}_tableau.png")):
+            continue  # user-supplied or already captured — never overwrite
+        ws_keys.setdefault(ws, []).append(key)
+    if not ws_keys:
+        return 0
+
+    caps = TC.capture_report(art.out_dir, twb, art.model_name, list(ws_keys))
+    made = 0
+    for ws, keys in ws_keys.items():
+        src = caps.get(ws)
+        if not src or not os.path.isfile(src):
+            continue
+        for key in keys:
+            dst = os.path.join(screens, f"{key}_tableau.png")
+            if os.path.isfile(dst):
+                continue
+            try:
+                shutil.copyfile(src, dst)
+                made += 1
+            except OSError:
+                pass
+    if made:
+        print(f"  staged {made} real Tableau Desktop worksheet capture(s)")
+    elif ws_keys:
+        print("  Tableau Desktop capture unavailable this run; falling back to "
+              "embedded thumbnails.")
+    return made
 
 
 
 def _generate_screenshots(art, visuals, filters) -> int:
     """Stage REAL evidence for every visual + filter.
 
-    The Tableau pane is the genuine worksheet/dashboard thumbnail Tableau Desktop
-    embedded in the .twb. The Power BI pane is a REAL Power BI Desktop capture of
-    the rendered report page (see ``_capture_powerbi``). Both never overwrite a
-    user-supplied PNG of the same name.
+    The Tableau pane is a REAL Tableau Desktop capture of the worksheet (see
+    ``_capture_tableau``); worksheets Tableau can't capture fall back to the
+    genuine thumbnail Tableau embedded in the .twb. The Power BI pane is a REAL
+    Power BI Desktop capture of the rendered report page (see ``_capture_powerbi``).
+    Both never overwrite a user-supplied PNG of the same name.
 
     Returns ``(tableau_thumbnail_count, power_bi_capture_count)``.
     """
+    # ALWAYS start from a clean slate: every validation / refinement recaptures
+    # the ENTIRE set of screenshots fresh from BOTH desktop apps — a previous
+    # run's images are never reused. Delete all pipeline captures up front so
+    # Tableau Desktop and Power BI Desktop are relaunched and every pane is
+    # regenerated from the live reports on each run.
+    screens_dir = SS.ensure_dir(art.out_dir)
+    n = _clear_auto_captures(screens_dir)
+    print(f"  fresh run — cleared {n} previous capture(s); regenerating EVERY "
+          "screenshot from Tableau + Power BI Desktop (no image is reused).")
+
+    # real Tableau Desktop per-worksheet captures (highest-fidelity Tableau side)
+    _capture_tableau(art, visuals, filters)
+
     try:
         import tableau_thumbs as TT  # noqa: E402  (catchable ImportError)
     except ImportError:
