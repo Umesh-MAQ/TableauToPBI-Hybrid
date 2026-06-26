@@ -302,6 +302,7 @@ STRUCTURAL_TAGS = {
     "node-selection", "oriented-node-reference", "node-reference", "fields",
     "geometry", "refresh", "refresh-event", "date-options", "extract",
     "mapsource", "color-one-way", "reference-line", "table-calc", "drill-path",
+    "drill-paths",
     "customized-label", "caption", "page-reference", "mark-sizing",
     "expression", "filter", "view", "text", "zoom", "highlight", "AccessibleZoneTabOrder", "ZoneFriendlyName",
     "ZoneBackgroundTransparency", "WorksheetBackgroundTransparency",

@@ -274,6 +274,15 @@ def _repoint_dax_table(dax: str, old: str, new: str) -> str:
     dax = re.sub(rf"'{re.escape(old)}'\s*\[", f"{new_tok}[", dax)
     # Unquoted form: Old[  ->  new_tok[  (word-bounded, not already quoted)
     dax = re.sub(rf"(?<![\w'])({re.escape(old)})\s*\[", f"{new_tok}[", dax)
+    # Bare TABLE references (the token is the table itself, not a column qualifier)
+    # e.g. COUNTROWS ( Old ), SUMX ( Old, ... ), or a lone 'Old Name'. The Tableau
+    # 'Number of Records' row-count measure is COUNTROWS(<placeholder table>); when
+    # re-homed onto the real fact this bare reference must move too, else it points
+    # at a table that no longer exists and Power BI reports a cyclic/blocked
+    # evaluation. The qualifier forms above already consumed any ``Old[`` so only
+    # genuine bare references remain here.
+    dax = re.sub(rf"'{re.escape(old)}'(?!\s*\[)", new_tok, dax)
+    dax = re.sub(rf"(?<![\w'\[]){re.escape(old)}(?![\w]|\s*\[)", new_tok, dax)
     return dax
 
 
@@ -294,14 +303,20 @@ def merge_partial_measures(decisions: Dict, analysis_path: str) -> Dict:
         return decisions
     measures = decisions.setdefault("measures", [])
     existing = {_norm_name(m.get("name", "")) for m in measures}
+    # A name already materialised as a calculated column (e.g. an agent-authored
+    # Tableau bin/grouping field) must not be re-added here as a bare-column measure
+    # -- the deterministic translator passes such dimension-role fields through as
+    # invalid bare-column measures. The calculated column is the resolved artifact.
+    calc_col_names = {_norm_name(c.get("name", ""))
+                      for c in decisions.get("calculatedColumns", [])}
     table_names = {t.get("name") for t in decisions.get("tables", [])}
     fact = next((t["name"] for t in decisions.get("tables", [])
                  if t.get("role") == "fact"), None)
     added = 0
     for m in det:
         key = _norm_name(m.get("name", ""))
-        if not key or key in existing:
-            continue  # agent already authored this measure -> keep theirs
+        if not key or key in existing or key in calc_col_names:
+            continue  # agent already authored this measure/column -> keep theirs
         home = m.get("table") if m.get("table") in table_names else (fact or m.get("table"))
         if home not in table_names:
             continue  # no valid host table -> let reconciliation flag it instead
@@ -441,8 +456,50 @@ def build_table_file(table: Dict, ir: Dict, decisions: Dict, seq: int) -> str:
         lines += [B.calc_column_block(part["name"], dax, part["dataType"],
                                       part["format"], seq * 1000 + 500 + j), ""]
         seen.add(part["name"].lower())
+    # Tableau drill-path hierarchies whose levels all resolve to columns on THIS
+    # table -> emit a Power BI model hierarchy. A hierarchy whose levels span
+    # several tables (no single owner) is skipped here rather than emitted with a
+    # dangling column reference that would break Power BI Desktop.
+    emitted_col_names = [c["name"] for c in cols] + [c["name"] for c in calc_cols]
+    for k, hb in enumerate(_hierarchies_for_table(emitted_col_names, ir, seq * 1000 + 800)):
+        lines += [hb, ""]
     lines.append(_partition_for(table, ir, cols, decisions))
     return "\n".join(lines)
+
+
+def _norm_ident(text: str) -> str:
+    """Normalise a column/level identifier for tolerant matching."""
+    return re.sub(r"[\s_/\-]", "", text or "").lower()
+
+
+def _hierarchies_for_table(col_names: List[str], ir: Dict, seq: int) -> List[str]:
+    """Return TMDL hierarchy blocks for IR drill-paths owned by this table.
+
+    A hierarchy is "owned" by a table only when EVERY level resolves to a real
+    column on that table (matched case-insensitively, tolerant of space/_/-/​/
+    differences between the Tableau caption and the emitted column name). Levels
+    are mapped back to the actual emitted column name so ``column:`` is always
+    valid. Hierarchies whose levels do not all resolve here are left for whichever
+    table owns them — or skipped entirely if no single table owns them all.
+    """
+    by_norm = {_norm_ident(c): c for c in col_names}
+    blocks: List[str] = []
+    for h, hier in enumerate(ir.get("hierarchies", []) or []):
+        levels = hier.get("levels") or []
+        if len(levels) < 2:
+            continue
+        resolved: List[tuple] = []
+        for lvl in levels:
+            col = by_norm.get(_norm_ident(lvl))
+            if col is None:
+                resolved = []
+                break
+            resolved.append((lvl, col))
+        if resolved:
+            blocks.append(B.hierarchy_block(hier.get("name") or "Hierarchy",
+                                            resolved, seq + h * 32))
+    return blocks
+
 
 
 def _date_part_columns(table: Dict, cols: List[Dict], ir: Dict) -> List[Dict]:
@@ -520,12 +577,47 @@ def _columns_for(table: Dict, ir: Dict, decisions: Dict) -> List[Dict]:
             cols = ([c for c in cols if c.get("datasource") == preferred]
                     + [c for c in cols if c.get("datasource") != preferred])
     cols = _dedupe_columns(cols)
+    # Scope a non-CSV table (multi-sheet Excel / multi-table DB) to the columns of
+    # its own physical sheet/table. The CSV path scopes via the physical header in
+    # _reconcile_with_csv; non-CSV sources are not probed, so without this every
+    # table sharing the one datasource would receive ALL of its columns, collapsing
+    # a star schema into N identical wide tables.
+    cols = _scope_by_physical_table(table, ir, cols)
     # Anchor non-date tables on the physical CSV header: this ADDS physical
     # columns Tableau omitted, DROPS invented logical ones, and scopes a federated
     # fact to its own CSV (superset of main's probe fact-scoping). [from HEAD]
     if table.get("role") != "date":
         cols = _reconcile_with_csv(table, ir, cols)
     return cols
+
+
+def _scope_by_physical_table(table: Dict, ir: Dict, cols: List[Dict]) -> List[Dict]:
+    """Restrict a non-CSV fact/dim table to the columns of its own physical table.
+
+    A multi-sheet Excel workbook (or multi-table relational extract) exposes every
+    sheet/table through ONE Tableau datasource, so filtering columns by datasource
+    alone leaves each model table with the full column set. The IR tags every
+    column with its owning ``physicalTable``; match the model table to a physical
+    table (by its ``sourceTable``/``sourceSheet`` override, else its name, with a
+    trailing Excel ``$`` ignored) and keep only that table's columns. No-op for
+    CSV (handled by the physical-header reconcile) and single-table sources.
+    """
+    if table.get("role") not in ("fact", "dim"):
+        return cols
+    src = (table.get("sourceFile") or "")
+    if str(src).lower().endswith(".csv"):
+        return cols
+    phys = ir.get("physicalTables", [])
+    if len(phys) <= 1:
+        return cols
+    want = table.get("sourceTable") or table.get("sourceSheet") or table.get("name")
+    want_norm = _normalize_name(re.sub(r"\$$", "", str(want)))
+    phys_norms = {_normalize_name(pt.get("name", "")) for pt in phys}
+    if want_norm not in phys_norms:
+        return cols
+    scoped = [c for c in cols
+              if _normalize_name(str(c.get("physicalTable") or "")) == want_norm]
+    return scoped or cols
 
 
 def _reconcile_with_csv(table: Dict, ir: Dict, ir_cols: List[Dict]) -> List[Dict]:
@@ -554,9 +646,17 @@ def _reconcile_with_csv(table: Dict, ir: Dict, ir_cols: List[Dict]) -> List[Dict
         match = ir_by_key.get(key)
         if match:
             col = dict(match)
-            col["name"] = raw_name
+            # Keep the canonical (trimmed) IR name as the MODEL column name so every
+            # DAX reference and report binding -- which all use the trimmed name --
+            # resolves. Carry the actual CSV header (which may have leading/trailing
+            # whitespace, e.g. ' Sites ', ' Covaxin (Doses Administered)') as csv_name
+            # so the partition renames the promoted header to the logical name before
+            # typing it; otherwise the WithDates/Typed steps reference a column that
+            # does not exist on the promoted table ('the column X wasn't found').
+            col["csv_name"] = raw_name
         else:
-            col = {"name": raw_name, "dataType": B.infer_csv_type(rows, idx),
+            col = {"name": raw_name, "csv_name": raw_name,
+                   "dataType": B.infer_csv_type(rows, idx),
                    "role": "dimension", "format": None}
         out.append(col)
     return out
@@ -774,9 +874,28 @@ def _probe_for_table(table: Dict, ir: Dict) -> Dict | None:
     if result is None:
         return None
     ir_cols = ir.get("columns", [])
+    # Scope the IR columns used for header->logical matching to THIS table's
+    # physical CSV. Otherwise columns that share a normalized name across tables
+    # (e.g. fact 'Customer ID' vs dim 'Customer_ID', 'Postal Code' vs
+    # 'Postal_Code') collide and the later one wins, renaming a fact's foreign
+    # key to the dim's spelling and breaking the relationship in Power BI.
+    base = _normalize_name(os.path.basename(str(raw_path)))
+    scoped = [c for c in ir_cols
+              if _normalize_name(str(c.get("physicalTable") or "")) == base]
+    if scoped:
+        match_cols = scoped
+    else:
+        # Nothing resolved to this physical table. Only fall back to the global
+        # column set when it is collision-free: a single physical table, or no
+        # lineage at all (a genuinely single-flat source). With two-or-more
+        # physical tables the global fallback is exactly what corrupts a fact's
+        # foreign keys, so refuse it and match the raw headers instead.
+        phys = {_normalize_name(str(c.get("physicalTable")))
+                for c in ir_cols if c.get("physicalTable")}
+        match_cols = ir_cols if len(phys) <= 1 else []
     return {
         "delimiter": result["delimiter"],
-        "columns": _build_csv_columns(result["headers"], ir_cols),
+        "columns": _build_csv_columns(result["headers"], match_cols),
     }
 
 
@@ -918,7 +1037,7 @@ def _build_calculated_table_tmdl(ct: Dict, lineage_base: int) -> str:
             f"\t\tdataType: {col.get('dataType', 'string')}",
         ]
         if col.get("formatString"):
-            lines.append(f"\t\tformatString: {col['formatString']}")
+            lines.append(f"\t\tformatString: {B.safe_format_string(col['formatString'])}")
         lines += [
             f"\t\tlineageTag: {ctag}",
             f"\t\tsummarizeBy: {col.get('summarizeBy', 'none')}",

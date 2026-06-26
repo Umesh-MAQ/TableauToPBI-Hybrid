@@ -29,6 +29,29 @@ def color(hex_value: str) -> Dict:
     return {"solid": {"color": {"expr": {"Literal": {"Value": f"'{hex_value}'"}}}}}
 
 
+def opaque_color(hex_value: Optional[str], fallback: str = "#004263") -> str:
+    """Return a guaranteed-visible opaque ``#RRGGBB`` hex for a button fill.
+
+    A Power BI button fill/background MUST never be transparent or the button
+    renders as an invisible (all-white) tile. Tableau worksheet formatting often
+    yields a fully transparent mark colour (``#00000000``), and the auto-derived
+    theme adopted it as the button fill -- which made every show/hide and
+    navigation button disappear. This normalises any input to an opaque six-digit
+    hex, substituting ``fallback`` whenever the colour is missing, malformed, or
+    fully transparent (8-digit ``#AARRGGBB`` with alpha ``00``).
+    """
+    if not isinstance(hex_value, str):
+        return fallback
+    h = hex_value.strip().lstrip("#")
+    if len(h) not in (6, 8) or any(c not in "0123456789abcdefABCDEF" for c in h):
+        return fallback
+    if len(h) == 8:
+        if h[:2].lower() == "00":      # fully transparent -> unusable as a fill
+            return fallback
+        h = h[2:]                      # drop the alpha byte, keep the RGB
+    return "#" + h.lower()
+
+
 def _num(value) -> Dict:
     """Wrap a number as a PBIR double literal (e.g. 14 -> '14D')."""
     return {"expr": {"Literal": {"Value": f"{value}D"}}}
@@ -184,51 +207,63 @@ def topn_filter_config(entity: str, category_prop: str, n: int,
     }]}
 
 
-def projection(entity: str, prop: str, active: bool = True) -> Dict:
-    """A single column projection for a visual query."""
+def projection(entity: str, prop: str, active: bool = True,
+               display: Optional[str] = None) -> Dict:
+    """A single column projection for a visual query.
+
+    ``display`` overrides the column header (nativeQueryRef) so a matrix can show a
+    Tableau-friendly caption instead of the raw model column name.
+    """
     return {
         "field": {"Column": {
             "Expression": {"SourceRef": {"Entity": entity}}, "Property": prop}},
-        "queryRef": f"{entity}.{prop}", "nativeQueryRef": prop, "active": active,
+        "queryRef": f"{entity}.{prop}", "nativeQueryRef": display or prop,
+        "active": active,
     }
 
 
-def measure_projection(entity: str, prop: str, active: bool = True) -> Dict:
+def measure_projection(entity: str, prop: str, active: bool = True,
+                       display: Optional[str] = None) -> Dict:
     """A single measure projection for a visual query."""
     return {
         "field": {"Measure": {
             "Expression": {"SourceRef": {"Entity": entity}}, "Property": prop}},
-        "queryRef": f"{entity}.{prop}", "nativeQueryRef": prop, "active": active,
+        "queryRef": f"{entity}.{prop}", "nativeQueryRef": display or prop,
+        "active": active,
     }
 
 
 def aggregation_projection(entity: str, prop: str, func: int,
-                           label: str = "Count", active: bool = True) -> Dict:
+                           label: str = "Count", active: bool = True,
+                           display: Optional[str] = None) -> Dict:
     """An inline-aggregation projection (Power BI QueryAggregateFunction ``func``).
 
     Used when a chart plots an aggregation of a column that has no named model
     measure (e.g. ``COUNTD([show_id])`` on a fact table with no measures). Wrapping
     the column in an Aggregation makes Power BI compute the aggregate instead of
-    trying to plot the raw column, so the visual renders a real number.
+    trying to plot the raw column, so the visual renders a real number. ``display``
+    overrides the column header (else "<label> of <prop>").
     """
     return {
         "field": {"Aggregation": {
             "Expression": {"Column": {
                 "Expression": {"SourceRef": {"Entity": entity}}, "Property": prop}},
             "Function": func}},
-        "queryRef": f"{label}({entity}.{prop})", "nativeQueryRef": f"{label} of {prop}",
+        "queryRef": f"{label}({entity}.{prop})",
+        "nativeQueryRef": display or f"{label} of {prop}",
         "active": active,
     }
 
 
 def binding_projection(b: Dict) -> Dict:
-    """Build a projection from a {entity, prop, isMeasure?, agg?} binding dict."""
+    """Build a projection from a {entity, prop, isMeasure?, agg?, displayName?}."""
+    disp = b.get("displayName")
     if b.get("agg") is not None:
         return aggregation_projection(b["entity"], b["prop"], b["agg"],
-                                      b.get("aggLabel") or "Count")
+                                      b.get("aggLabel") or "Count", display=disp)
     if b.get("isMeasure"):
-        return measure_projection(b["entity"], b["prop"])
-    return projection(b["entity"], b["prop"])
+        return measure_projection(b["entity"], b["prop"], display=disp)
+    return projection(b["entity"], b["prop"], display=disp)
 
 
 def slicer_visual(name: str, pos: Dict, entity: str, prop: str,
@@ -427,6 +462,100 @@ def combo_visual(name: str, pos: Dict, category: Dict,
     return {"$schema": VC_SCHEMA, "name": name, "position": pos, "visual": visual}
 
 
+def scatter_visual(name: str, pos: Dict, x_value: Dict, y_value: Dict,
+                   category: Optional[Dict] = None, title: Optional[str] = None,
+                   theme: Optional[Dict] = None, size: Optional[Dict] = None,
+                   single_color: Optional[str] = None,
+                   tooltips: Optional[List[Dict]] = None) -> Dict:
+    """Build a scatterChart visual.json dict (Tableau Circle mark, two measures).
+
+    ``x_value`` / ``y_value`` are the two plotted measures (the X and Y axes);
+    ``category`` (Details) creates one point per dimension member; ``size``
+    optionally drives bubble size. Reproduces a Tableau scatter where each mark is
+    a dimension member positioned by two aggregated measures.
+    """
+    qs: Dict = {
+        "Category": ({"projections": [binding_projection(category)]}
+                     if category else {"projections": []}),
+        "X": {"projections": [binding_projection(x_value)]},
+        "Y": {"projections": [binding_projection(y_value)]},
+    }
+    if size:
+        qs["Size"] = {"projections": [binding_projection(size)]}
+    if tooltips:
+        qs["Tooltips"] = {"projections": [binding_projection(t) for t in tooltips]}
+    query = {"queryState": qs}
+    objects: Dict = {}
+    fg = (theme or {}).get("foreground")
+    cat_ax: Dict = {"show": literal(True), "labelDisplayUnits": _display_units(x_value)}
+    val_ax: Dict = {"show": literal(True), "labelDisplayUnits": _display_units(y_value)}
+    if fg:
+        cat_ax["labelColor"] = color(fg)
+        cat_ax["titleColor"] = color(fg)
+        val_ax["labelColor"] = color(fg)
+        val_ax["titleColor"] = color(fg)
+    objects["categoryAxis"] = [{"properties": cat_ax}]
+    objects["valueAxis"] = [{"properties": val_ax}]
+    if single_color:
+        objects["dataPoint"] = [{"properties": {
+            "fill": color(single_color), "showAllDataPoints": literal(True)}}]
+    if category:
+        legend = {"show": literal(True)}
+        if fg:
+            legend["labelColor"] = color(fg)
+        objects["legend"] = [{"properties": legend}]
+    visual = {"visualType": "scatterChart", "query": query, "objects": objects,
+              "visualContainerObjects": container_objects(title, theme)}
+    return {"$schema": VC_SCHEMA, "name": name, "position": pos, "visual": visual}
+
+
+def gantt_visual(name: str, pos: Dict, category: Dict, duration: Dict,
+                 start: Optional[Dict] = None, title: Optional[str] = None,
+                 theme: Optional[Dict] = None,
+                 tooltips: Optional[List[Dict]] = None) -> Dict:
+    """Build a Gantt-style timeline as a native horizontal stacked bar chart.
+
+    Power BI core has no Gantt visual, so the faithful native equivalent is a
+    horizontal stacked bar: a transparent ``start`` offset segment positions each
+    task and the visible ``duration`` segment draws the bar — the standard
+    "Gantt via stacked bar" technique. ``category`` is the task/row dimension. When
+    no ``start`` offset measure is available the bar simply encodes duration per
+    task (which always loads as a plain horizontal bar).
+    """
+    y_proj: List[Dict] = []
+    if start:
+        y_proj.append(binding_projection(start))
+    y_proj.append(binding_projection(duration))
+    qs: Dict = {
+        "Category": {"projections": [binding_projection(category)]},
+        "Y": {"projections": y_proj},
+    }
+    if tooltips:
+        qs["Tooltips"] = {"projections": [binding_projection(t) for t in tooltips]}
+    query = {"queryState": qs}
+    objects: Dict = {}
+    # Make the leading start-offset segment blend into the canvas so only the
+    # duration bar reads as the visible task. With no themed background, white on
+    # the default white page is effectively invisible.
+    if start:
+        base_fill = (theme or {}).get("visualBackground") \
+            or (theme or {}).get("pageBackground") or "#FFFFFF"
+        objects["dataPoint"] = [{
+            "properties": {"fill": color(base_fill)},
+            "selector": {"metadata": f"{start['entity']}.{start['prop']}"},
+        }]
+    fg = (theme or {}).get("foreground")
+    cat_ax: Dict = {"show": literal(True)}
+    if fg:
+        cat_ax["labelColor"] = color(fg)
+        cat_ax["titleColor"] = color(fg)
+    objects["categoryAxis"] = [{"properties": cat_ax}]
+    objects["labels"] = [{"properties": {"show": literal(False)}}]
+    visual = {"visualType": "stackedBarChart", "query": query, "objects": objects,
+              "visualContainerObjects": container_objects(title, theme)}
+    return {"$schema": VC_SCHEMA, "name": name, "position": pos, "visual": visual}
+
+
 def pie_visual(name: str, pos: Dict, category: Dict, value: Dict,
                title: Optional[str] = None, theme: Optional[Dict] = None,
                donut: bool = False, series_colors: Optional[Dict] = None,
@@ -580,9 +709,17 @@ def nav_button_visual(name: str, pos: Dict, label: Optional[str],
     placing it under visual.objects makes the button render but do nothing. When
     target_page is None the button still renders (styled) but carries no action.
     """
+    # A transparent fill (e.g. a Tableau '#00000000' mark colour adopted by the
+    # auto-derived theme) renders the button as an invisible all-white tile, so
+    # force an opaque fill and frame it with a contrasting outline -- the button
+    # is then always visible regardless of the source theme or page background.
+    fill = opaque_color(fill)
     objects: Dict = {
-        "icon": [{"properties": {"shapeType": literal("Arrow")}}],
-        "outline": [{"properties": {"show": literal(False)}}],
+        "icon": [{"properties": {"shapeType": literal("Arrow"),
+                                 "lineColor": color(text_color)}}],
+        "outline": [{"properties": {"show": literal(True),
+                                    "lineColor": color(text_color),
+                                    "weight": _num(1)}}],
         "fill": [{"properties": {"show": literal(True), "fillColor": color(fill)}}],
         "text": [{"properties": {
             "show": literal(bool(label)),
@@ -617,9 +754,17 @@ def bookmark_button_visual(name: str, pos: Dict, label: Optional[str],
     visualContainerObjects.visualLink (type=Bookmark + bookmark id); putting it
     under visual.objects makes the button render but do nothing.
     """
+    # A transparent fill (e.g. a Tableau '#00000000' mark colour adopted by the
+    # auto-derived theme) renders the toggle button as an invisible all-white
+    # tile, so force an opaque fill, a contrasting icon glyph and a framing
+    # outline -- the button is always visible regardless of theme/page colour.
+    fill = opaque_color(fill)
     objects: Dict = {
-        "icon": [{"properties": {"shapeType": literal(icon)}}],
-        "outline": [{"properties": {"show": literal(False)}}],
+        "icon": [{"properties": {"shapeType": literal(icon),
+                                 "lineColor": color(text_color)}}],
+        "outline": [{"properties": {"show": literal(True),
+                                    "lineColor": color(text_color),
+                                    "weight": _num(1)}}],
         "fill": [{"properties": {"show": literal(True), "fillColor": color(fill)}}],
         "text": [{"properties": {
             "show": literal(bool(show_text and label)),

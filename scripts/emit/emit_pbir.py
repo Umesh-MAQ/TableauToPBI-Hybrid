@@ -150,6 +150,42 @@ def visual_decision(ws_name: str, decisions: Dict) -> Dict:
     return {}
 
 
+def _agent_decided(ws_name: str, decisions: Dict) -> bool:
+    """True when the agent explicitly chose a visual type for this worksheet, so a
+    deterministic mark-based promotion (e.g. text-table -> matrix) must not override
+    it."""
+    return any(vd.get("worksheet") == ws_name
+               for vd in decisions.get("visualDecisions", []))
+
+
+# A MAX/MIN aggregation over a date/datetime column -- Tableau's continuous time
+# axis pill (e.g. ``MAX([EXTRACT_DATETIME])`` placed on the columns shelf), never a
+# plottable Y metric.
+_DATE_AGG_RX = re.compile(
+    r"\b(?:MAX|MIN)\s*\(\s*[^()\[\]]*\[(?P<col>[^\]]+)\]\s*\)", re.IGNORECASE)
+
+
+def _is_temporal_value(valbind: Optional[Dict], dcols: set,
+                       decisions: Optional[Dict]) -> bool:
+    """True when a cartesian value binding actually plots a DATE/DATETIME axis
+    (a ``MAX``/``MIN`` of a date column, or an inline aggregation of one). Such a
+    value is Tableau's time axis mis-routed onto Y; rendering a datetime on the
+    value axis crashes Power BI's cartesian visual (``categoryIdentities`` error)."""
+    if not valbind:
+        return False
+    prop = valbind.get("prop")
+    if not prop:
+        return False
+    if valbind.get("isMeasure"):
+        for m in (decisions or {}).get("measures", []):
+            if m.get("name") == prop:
+                mm = _DATE_AGG_RX.search(m.get("dax") or "")
+                return bool(mm and mm.group("col") in dcols)
+        return False
+    # Inline aggregation pill straight off a date column.
+    return prop in dcols
+
+
 # Tableau-friendly aliases mapped to the concrete Power BI cartesian visualType.
 CHART_TYPE_MAP = {
     "columnChart": "clusteredColumnChart",
@@ -174,9 +210,14 @@ def primary_entity(decisions: Dict) -> str:
 
 def _build_kpi_stack(name: str, pos: Dict, x: int, y: int, w: int, h: int,
                      z: int, vd: Dict, entity: str, theme,
-                     units: Optional[Dict] = None) -> List[Dict]:
+                     units: Optional[Dict] = None,
+                     decisions: Optional[Dict] = None) -> List[Dict]:
     """Return [card_visual, pct_card_visual, sparkline_visual] for a KPI zone."""
     units = units or {}
+    decisions = decisions or {}
+    # A measure reference must name the table the measure is DEFINED on, not the
+    # fact entity, or Power BI cannot resolve it and the tile renders broken.
+    me = lambda m: B.measure_entity(m, decisions, entity)
     card_h  = round(h * 0.30)
     pct_h   = round(h * 0.15)
     spark_h = h - card_h - pct_h
@@ -187,25 +228,25 @@ def _build_kpi_stack(name: str, pos: Dict, x: int, y: int, w: int, h: int,
     # card — big CY number
     card = P.card_visual(
         f"card_{name}", P.position(x, y, w, card_h, z),
-        entity, total_m, title=title_text, theme=theme,
+        me(total_m), total_m, title=title_text, theme=theme,
         display_units=units.get(total_m, 1),
     )
     # % diff card
     pct = P.card_visual(
         f"pct_{name}", P.position(x, y + card_h, w, pct_h, z + 1),
-        entity, pct_m, title=None, theme=theme,
+        me(pct_m), pct_m, title=None, theme=theme,
         display_units=units.get(pct_m, 1),
     )
     # sparkline — keep original type (lineChart)
     spark_vd = dict(vd)
     spark_vd.pop("kpiStack", None)
-    sec_bind = ({"entity": entity, "prop": sec_v, "isMeasure": True,
+    sec_bind = ({"entity": me(sec_v), "prop": sec_v, "isMeasure": True,
                  "displayUnits": units.get(sec_v, 1)}) if sec_v else None
-    add_binds = [{"entity": entity, "prop": av, "isMeasure": True,
+    add_binds = [{"entity": me(av), "prop": av, "isMeasure": True,
                   "displayUnits": units.get(av, 1)}
                  for av in (vd.get("additionalValues") or [])]
     catbind  = {"entity": entity, "prop": vd.get("categoryField", "Order Date")}
-    valbind  = {"entity": entity, "prop": total_m, "isMeasure": True,
+    valbind  = {"entity": me(total_m), "prop": total_m, "isMeasure": True,
                 "displayUnits": units.get(total_m, 1)}
     spark = P.chart_visual(
         f"spark_{name}", P.position(x, y + card_h + pct_h, w, spark_h, z + 2),
@@ -362,6 +403,12 @@ def _is_card_ws(ws: Optional[Dict]) -> bool:
                   if f not in vals]
     if shelf_dims:
         return False
+    # A temporal field on a shelf is a real time axis -- a trend line, not a
+    # scalar card -- even when the parser aggregated it (SUM(year)) and counted it
+    # among the values, leaving no plain shelf dimension. Shares mark_infer's
+    # temporal signal so the parser inference and the emitter agree.
+    if MI.has_temporal_axis(ws):
+        return False
     return bool(ws.get("values") or ws.get("measures"))
 
 
@@ -379,6 +426,29 @@ def _is_date_trend(ws: Optional[Dict], mset: set) -> bool:
         return False
     shelf = (ws.get("rows") or []) + (ws.get("cols") or [])
     return any(f in mset for f in shelf)
+
+
+# A model measure that is a single, simple aggregation of ONE column, e.g. the
+# synthesized 'Sum of year' = SUM(date[year]). Used to detect when a chart's
+# value resolved to the category-axis column's own aggregation (a spurious series).
+_SIMPLE_AGG_RX = re.compile(
+    r"^\s*(?:SUM|AVERAGE|AVG|MIN|MAX|COUNT|COUNTA|DISTINCTCOUNT)\s*\(\s*"
+    r"(?:'[^']+'|\w+)\s*\[(?P<col>[^\]]+)\]\s*\)\s*$", re.IGNORECASE)
+
+
+def _measure_aggs_column(measure_name: Optional[str], column: Optional[str],
+                         decisions: Dict) -> bool:
+    """True when ``measure_name`` is a plain aggregation of ``column`` (e.g.
+    'Sum of year' = SUM(date[year])). Lets the cartesian emitter drop the
+    category-axis field from the plotted values so a trend line shows the metric,
+    not the axis column's totals as a second series."""
+    if not measure_name or not column:
+        return False
+    for m in decisions.get("measures", []):
+        if m.get("name") == measure_name:
+            mm = _SIMPLE_AGG_RX.match(m.get("dax") or "")
+            return bool(mm and mm.group("col") == column)
+    return False
 
 
 def _shelf_dims(ws: Optional[Dict], shelf: str, cols: set) -> List[str]:
@@ -561,6 +631,11 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
     mset = set(mlist)
     cols = B.column_names(ir)
     valf = ws.get("valueField") if ws else None
+    # Parameter-echo measures ('Current Year' = SELECTEDVALUE of the year slicer)
+    # return a constant scalar, not a metric. They must never be a card headline
+    # or a plotted series, else every KPI tile shows '2023' and charts grow a flat
+    # year bar. Computed once here and excluded at every value-selection point.
+    echo = B.parameter_echo_measures(decisions)
     # With no agent decision, recover an executive KPI/BAN tile (CY/PY measures +
     # date sparkline) so it renders as a stacked card instead of a wide dimension
     # dump. The kpiStack branch below returns before the table fallback.
@@ -568,6 +643,25 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         kvd = _kpi_tile_decision(ws, mset)
         if kvd:
             vd = kvd
+    # An explicit 'kpiStack' decision (the screenshot layer sees the big-number +
+    # ▲% vs PY + sparkline tile and marks the worksheet as kpiStack) is enriched
+    # with the CY/PY/%Diff measures and date grain the deterministic recovery
+    # derives. A plain 'card' decision is ALSO upgraded when the worksheet has the
+    # exact executive-KPI shape (CY/PY[/% Diff] measures over a date sparkline) so
+    # every KPI tile renders like the Tableau dashboard -- big number + ▲% vs PY +
+    # 12-month trend -- regardless of whether the agent (or a screenshot hint)
+    # labelled it 'card' or 'kpiStack'. If the worksheet lacks that KPI shape an
+    # explicit kpiStack degrades to a plain card so it still shows a single number.
+    elif (vtype in ("kpiStack", "card") or vd.get("visualType") in ("kpiStack", "card")) \
+            and not vd.get("kpiStack"):
+        kvd = _kpi_tile_decision(ws, mset)
+        if kvd:
+            for k, v in vd.items():
+                if k not in ("visualType", "reason", "worksheet"):
+                    kvd[k] = v
+            vd, vtype = kvd, "kpiStack"
+        elif vtype == "kpiStack":
+            vtype = "card"
     # Last-resort rescue: a worksheet with a plotted date axis + measure pills that
     # stayed ambiguous (no agent decision -> tableEx fallback) is a time trend, not
     # a flat table. Promote it to a line chart so the deterministic path shows the
@@ -583,6 +677,10 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
     def _with_units(b: Dict) -> Dict:
         if b.get("isMeasure"):
             b["displayUnits"] = units.get(b["prop"], 1)
+            # A measure reference must name the table the measure is DEFINED on,
+            # not the visual's fact entity. Naming the fact for a measure that
+            # lives on a dim makes Power BI fail to resolve it -> broken visual.
+            b["entity"] = B.measure_entity(b["prop"], decisions, b.get("entity"))
         return b
 
     # A worksheet with a measure value and NO category on any shelf is a KPI/BAN
@@ -598,6 +696,24 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
     # cardinality key column and render as thousands of tiny tiles.
     if vtype == "treemap" and not vd.get("category") and _is_crosstab_ws(ws, cols):
         vtype = "matrix"
+
+    # A Tableau text-table / cross-tab worksheet (a multi-level ROW hierarchy with
+    # measure value columns -- e.g. Entity > Site > Level Of Care > Department x
+    # Licensed, Staffed, Occupied, ...) is faithfully a Power BI MATRIX, not a flat
+    # detail table nor a choropleth map. The flat ``tableEx`` fallback emits columns
+    # in the IR's unordered ``dimensions`` order (threshold/helper columns first,
+    # the real hierarchy last) and drops grouped levels; a Polygon/Filled-Map mark
+    # mis-infers a map when the sheet carries no geographic field. Only fires for
+    # the deterministic fallbacks (no agent visual decision) so agent-chosen charts
+    # and genuine single-location maps are untouched, and only when the worksheet
+    # has >=2 stacked row dimensions (a real hierarchy worth a matrix).
+    if vtype in ("tableEx", "filledMap", "map") and not _agent_decided(ws_name, decisions) \
+            and not vd.get("tableColumns") and not vd.get("kpiStack"):
+        pivot = B.pivot_matrix_layout(ws, ir, entity, mset, cols, decisions)
+        if pivot:
+            vd = {**vd, "rows": pivot["rows"], "columns": pivot.get("columns"),
+                  "values": pivot["values"]}
+            vtype = "matrix"
 
     def value_bind() -> Dict:
         v = vd.get("value")
@@ -617,7 +733,7 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         agg = B.pill_agg_binding(ws, entity, cols, decisions, ir)
         if agg:
             return agg
-        return B.value_binding(valf, entity, mset, mlist, cols, ir)
+        return _with_units(B.value_binding(valf, entity, mset, mlist, cols, ir))
 
     # Caption-only worksheets (dynamic <caption>, no real shelves) -> textbox.
     caption = ws.get("caption") if ws else None
@@ -630,11 +746,20 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
 
     # Single-value card: measure value, else a text/dimension column value.
     if vtype == "card":
+        # A KPI card's headline is the metric, never the year selector. The parser
+        # often sets ``valueField`` to the first measure pill, which on a Tableau
+        # KPI sheet is the 'Current Year' parameter echo -> the card would show
+        # '2023'. Skip echo measures and pick the worksheet's real metric (CY
+        # Sales / CY Profit / …) matching the sheet name.
         m = (vd.get("value") if vd.get("value") in mset else None) \
-            or (valf if valf in mset else None) \
-            or B.measure_for_pill(ws, decisions, mset)
+            or (valf if (valf in mset and valf not in echo) else None) \
+            or B.kpi_value_measure(ws, ws_name, mset, echo, decisions)
+        if not m:
+            mp = B.measure_for_pill(ws, decisions, mset)
+            m = mp if (mp and mp not in echo) else None
         if m:
-            return P.card_visual(name, pos, entity, m, title=ws_name, theme=theme,
+            return P.card_visual(name, pos, B.measure_entity(m, decisions, entity),
+                                 m, title=ws_name, theme=theme,
                                  display_units=units.get(m, 1))
         # No named model measure: if the worksheet dropped an implicit numeric
         # aggregation onto the card (e.g. AVG(int_rate)), reproduce that exact
@@ -718,7 +843,8 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
 
     # KPI stack: card (big number) + pct card (% diff) + sparkline
     if vd.get("kpiStack"):
-        return _build_kpi_stack(name, pos, x, y, w, h, z, vd, entity, theme, units)
+        return _build_kpi_stack(name, pos, x, y, w, h, z, vd, entity, theme, units,
+                                decisions)
 
     # Combo chart (Tableau dual-axis): bars for the primary measure(s) on Y, a
     # line for the secondary measure on Y2, over a shared category. Columns vs
@@ -751,6 +877,64 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
             return combo
         # Could not resolve a clean combo -> fall through to the table fallback.
 
+    # Scatter (Tableau Circle mark with two measures): X and Y are the two plotted
+    # measures, one point per detail dimension member. A 1-measure Circle is mapped
+    # to a pie upstream, so a scatter here implies two measures; if two distinct
+    # measures cannot be resolved, fall through to the table fallback.
+    if vtype == "scatterChart":
+        plotted: List[str] = []
+        shelf = ((ws.get("values") or []) + (ws.get("rows") or [])
+                 + (ws.get("cols") or [])) if ws else []
+        for f in shelf:
+            if f in mset and f not in echo and f not in plotted:
+                plotted.append(f)
+        xm = vd.get("xValue") if vd.get("xValue") in mset else None
+        ym = vd.get("yValue") if vd.get("yValue") in mset else None
+        if not (xm and ym) and len(plotted) >= 2:
+            xm, ym = plotted[0], plotted[1]
+        if xm and ym:
+            xb = _with_units({"entity": entity, "prop": xm, "isMeasure": True})
+            yb = _with_units({"entity": entity, "prop": ym, "isMeasure": True})
+            if vd.get("category"):
+                catbind = {"entity": B.entity_for_field(vd["category"], entity, decisions, ir),
+                           "prop": vd["category"]}
+            else:
+                catbind = B.category_binding(ws, entity, cols, ir, decisions)
+            sizem = vd.get("size") if vd.get("size") in mset else None
+            sizeb = (_with_units({"entity": entity, "prop": sizem, "isMeasure": True})
+                     if sizem else None)
+            scatter = P.scatter_visual(
+                name, pos, xb, yb, category=catbind, title=ws_name, theme=theme,
+                size=sizeb,
+                single_color=vd.get("color") or (theme or {}).get("markColor"))
+            cfg = _topn_config(ws, catbind, yb, decisions, ir, mset)
+            if cfg:
+                scatter["filterConfig"] = cfg
+            return scatter
+        # Could not resolve two measures -> fall through to the table fallback.
+
+    # Gantt (Tableau Gantt mark): a timeline of duration bars per task. Power BI
+    # has no native Gantt, so render the faithful native equivalent — a horizontal
+    # stacked bar with a transparent start offset and a visible duration segment.
+    if vtype == "ganttChart":
+        if vd.get("category"):
+            catbind = {"entity": B.entity_for_field(vd["category"], entity, decisions, ir),
+                       "prop": vd["category"]}
+        else:
+            catbind = B.category_binding(ws, entity, cols, ir, decisions)
+        durb = value_bind()
+        startm = vd.get("startValue") if vd.get("startValue") in mset else None
+        startb = (_with_units({"entity": entity, "prop": startm, "isMeasure": True})
+                  if startm else None)
+        if catbind and catbind.get("prop") and durb:
+            gantt = P.gantt_visual(name, pos, catbind, durb, start=startb,
+                                   title=ws_name, theme=theme)
+            cfg = _topn_config(ws, catbind, durb, decisions, ir, mset)
+            if cfg:
+                gantt["filterConfig"] = cfg
+            return gantt
+        # Could not resolve a clean Gantt -> fall through to the table fallback.
+
     if vtype in CARTESIAN:
         mapped = CHART_TYPE_MAP.get(vtype, vtype)
         # categoryIsMeasure: treat the category field as a Measure (for histograms)
@@ -762,12 +946,63 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         else:
             catbind = None  # resolved below
         valbind = value_bind()
+        # A parameter-echo measure ('Current Year') is a constant year, not a
+        # plottable metric; if the primary value resolved to one (the parser's
+        # first-pill guess), swap it for the first real measure on the shelf so the
+        # chart shows the metric instead of a flat year bar.
+        if valbind.get("isMeasure") and valbind.get("prop") in echo:
+            alt = next((v for v in ((ws.get("cols") or []) + (ws.get("rows") or [])
+                                    + (ws.get("values") or []))
+                        if v in mset and v not in echo), None)
+            if alt:
+                valbind = _with_units({"entity": entity, "prop": alt, "isMeasure": True})
         fp = B.field_param_for_ws(ws_name, decisions)
         if catbind is None:
             if fp is not None:
                 catbind = {"entity": fp["name"], "prop": fp["name"]}
             else:
                 catbind = B.category_binding(ws, entity, cols, ir, decisions)
+        # Temporal-axis correction: when the resolved Y value is really a date/time
+        # axis (MAX/MIN of a date column -- Tableau puts the continuous date pill on
+        # the columns shelf of a trend chart), rebinding it onto Y both plots a
+        # meaningless aggregated date AND crashes Power BI's cartesian renderer
+        # (``categoryIdentities is not a function``). Move the date to the category
+        # (X) axis and plot the worksheet's first real numeric measure on Y instead.
+        if not vd.get("value") and _is_temporal_value(valbind, B.date_cols(ir), decisions):
+            pills = (ws.get("measures") or []) if ws else []
+            dcols = B.date_cols(ir)
+            real_pill = next((p for p in pills
+                              if (p.get("column") or p.get("field")) not in dcols
+                              and B.agg_func(p.get("agg")) is not None), None)
+            date_col = next(((p.get("column") or p.get("field")) for p in pills
+                             if (p.get("column") or p.get("field")) in dcols), None)
+            if real_pill and date_col:
+                rp_ws = {**ws, "measures": [real_pill]}
+                nm = B.measure_for_pill(rp_ws, decisions, mset)
+                new_val = (_with_units({"entity": entity, "prop": nm, "isMeasure": True})
+                           if nm else B.pill_agg_binding(rp_ws, entity, cols, decisions, ir))
+                if new_val:
+                    if not vd.get("category"):
+                        catbind = {"entity": B.entity_for_field(date_col, entity,
+                                                                decisions, ir),
+                                   "prop": date_col}
+                    valbind = new_val
+        # The category axis field must never ALSO be plotted as a value. When the
+        # parser aggregated a continuous axis (SUM(year)) the field became both the
+        # category AND the worksheet's primary pill, so value_bind() can resolve to
+        # that axis measure (e.g. 'Sum of year') and draw the year totals as a
+        # spurious series. The temporal correction above handles the date case; this
+        # is the fallback for any other aggregated-axis column. Swap it for the first
+        # real shelf/value measure that does not merely aggregate the axis column.
+        cat_axis = catbind.get("prop") if catbind else None
+        if (cat_axis and valbind.get("isMeasure")
+                and _measure_aggs_column(valbind.get("prop"), cat_axis, decisions)):
+            alt = next((v for v in ((ws.get("rows") or []) + (ws.get("cols") or [])
+                                    + (ws.get("values") or []))
+                        if v in mset and v not in echo
+                        and not _measure_aggs_column(v, cat_axis, decisions)), None)
+            if alt:
+                valbind = _with_units({"entity": entity, "prop": alt, "isMeasure": True})
         series = vd.get("series")
         seriesbind = ({"entity": B.entity_for_field(series, entity, decisions, ir),
                        "prop": series} if series else None)
@@ -787,11 +1022,13 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
             sort = P.measure_sort(entity, valbind["prop"]) if valbind.get("isMeasure") else None
         elif sd == "categoryAsc":
             sort = P.column_sort(catbind["entity"], catbind["prop"])
-        # Secondary / additional measures (e.g. PY lines on KPI sparklines)
+        # Secondary / additional measures (e.g. PY lines on KPI sparklines).
+        # Parameter-echo measures ('Current Year') are constants, never a series.
         sec_v = vd.get("secondaryValue")
-        sec_bind = _with_units({"entity": entity, "prop": sec_v, "isMeasure": True}) if sec_v and sec_v in mset else None
+        sec_bind = _with_units({"entity": entity, "prop": sec_v, "isMeasure": True}) \
+            if sec_v and sec_v in mset and sec_v not in echo else None
         add_binds = [_with_units({"entity": entity, "prop": av, "isMeasure": True})
-                     for av in (vd.get("additionalValues") or []) if av in mset]
+                     for av in (vd.get("additionalValues") or []) if av in mset and av not in echo]
         # Tooltip fields: Tableau shows the mark-card measures on hover. Auto-add
         # the worksheet's extra measures (beyond the plotted Y) plus any explicit
         # decisions.tooltips, so the PBI hover matches Tableau's tooltip.
@@ -811,7 +1048,7 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         if not add_binds and not sec_bind and not series:
             shelf_meas, seen_m = [], set()
             for f in (ws.get("rows") or []) + (ws.get("cols") or []):
-                if f in mset and f != primary and f not in seen_m:
+                if f in mset and f != primary and f not in seen_m and f not in echo:
                     seen_m.add(f)
                     shelf_meas.append(f)
             add_binds = [_with_units({"entity": entity, "prop": m, "isMeasure": True})
@@ -849,15 +1086,23 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         def _bind(spec):
             if isinstance(spec, dict):
                 ent = spec.get("entity") or B._field_entity(spec.get("prop"), decisions, ir)
-                return {"entity": ent, "prop": spec["prop"],
-                        "isMeasure": spec.get("isMeasure", spec.get("prop") in mset)}
+                out = {"entity": ent, "prop": spec["prop"],
+                       "isMeasure": spec.get("isMeasure", spec.get("prop") in mset)}
+                for k in ("agg", "aggLabel", "displayName"):
+                    if spec.get(k) is not None:
+                        out[k] = spec[k]
+                return out
             ent = entity if spec in mset else B._field_entity(spec, decisions, ir)
             return {"entity": ent, "prop": spec, "isMeasure": spec in mset}
         # Deterministic fallback when no agent decision: rows/cols from the
         # worksheet shelf, value from the measure pill mapped to its model measure.
+        # A parameter-echo measure ('Current Year') is a constant year, not a
+        # cell value, so it is never used as the matrix measure.
         mapped_m = B.measure_for_pill(ws, decisions, mset)
+        if mapped_m in echo:
+            mapped_m = None
         det_vals = [mapped_m] if mapped_m else [v for v in (ws.get("values") or [])
-                                                if ws and v in mset]
+                                                if ws and v in mset and v not in echo]
         rows = [_bind(r) for r in (vd.get("rows") or _shelf_dims(ws, "rows", cols))]
         cols_m = [_bind(c) for c in (vd.get("columns") or _shelf_dims(ws, "cols", cols))]
         vals = [_bind(v) for v in (vd.get("values") or det_vals)]
@@ -1015,7 +1260,10 @@ def build_page(dashboard: Dict, ir: Dict, decisions: Dict, pages_dir: str,
     # Navigation buttons: Tableau goto-sheet buttons -> Power BI actionButton with
     # page navigation. Toggle (show/hide) buttons -> a bookmark pair + two stacked
     # bookmark buttons (handled in the toggle loop below).
-    btn_fill = theme.get("markColor") or theme.get("outspace") or "#004263"
+    # The auto-derived theme can carry a transparent mark colour ('#00000000'),
+    # which would paint the buttons as invisible all-white tiles; opaque_color
+    # guarantees a visible solid fill regardless of the source theme.
+    btn_fill = P.opaque_color(theme.get("markColor") or theme.get("outspace"), "#004263")
     bz = 1000
     for button in dashboard.get("buttons", []):
         if button.get("action") != "goto-sheet":

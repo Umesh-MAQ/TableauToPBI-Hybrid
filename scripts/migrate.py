@@ -49,9 +49,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "twb"))
 sys.path.insert(0, os.path.join(HERE, "merge"))
+sys.path.insert(0, os.path.join(HERE, "dax"))
 import mark_infer as MI  # noqa: E402  (single source of truth for visual gating)
 import feature_audit as FA  # noqa: E402  (deterministic fidelity fingerprint)
 import merge_decisions as MD  # noqa: E402  (DAX safety escalation detector)
+import screenshot_overlay as SO  # noqa: E402  (dashboard screenshot discovery)
+import dax_cache as DC  # noqa: E402  (learned formula->DAX cache; written post-validation)
 
 PIPELINE = os.path.join(HERE, "pipeline.py")
 LOAD_CONST = os.path.join(HERE, "load_constitution.py")
@@ -545,11 +548,36 @@ def _print_banner(payload: Dict) -> None:
 # --------------------------------------------------------------------------- #
 # commands
 # --------------------------------------------------------------------------- #
+def _report_screenshots(twb: str, odir: str) -> None:
+    """Discover a report's dashboard screenshots and record them for the agent.
+
+    The screenshots are the vision layer's input: the orchestrating agent reads
+    them and authors ``visualHints`` in agent-fragment.json, which merge_decisions
+    overlays onto the visual decisions (see screenshot_overlay.py). Writing the
+    inventory here makes the convention discoverable and the run reproducible. Pure
+    no-op for any report that ships no ``Screenshot(s)`` folder.
+    """
+    data_dir = os.path.dirname(os.path.abspath(twb))
+    shots = SO.discover_screenshots(data_dir)
+    if not shots:
+        return
+    n = sum(len(v) for v in shots.values())
+    print(f"screenshots: {n} image(s), {len(shots)} dashboard(s): "
+          f"{', '.join(sorted(shots))}")
+    try:
+        with open(os.path.join(odir, "screenshots.json"), "w", encoding="utf-8",
+                  newline="\n") as fh:
+            json.dump({"dashboards": shots}, fh, indent=2, ensure_ascii=False)
+    except OSError:
+        pass
+
+
 def cmd_run(args) -> int:
     twb = discover_twb(args.target)
     print(f"workbook: {twb}")
     gaps = prepare(twb, args.output_root)
     odir = gaps["outDir"]
+    _report_screenshots(twb, odir)
 
     if gaps["needsAgent"]:
         # Idempotent re-run: if a previously-authored agent fragment already exists
@@ -715,6 +743,16 @@ def _finish_generate(analysis: str, decisions: str, odir: str,
         # workbook (visual mapping + measure + filter checks with side-by-side
         # screenshot evidence). Advisory — never fails an otherwise-valid emit.
         payload["validationWorkbook"] = _run_validation(odir)
+        # The .pbip built and every validator was green: this is the only moment a
+        # formula->DAX mapping is known-good. Teach the cache the agent's solutions
+        # so identical calcs route as deterministic next time (zero AI cost).
+        learned = DC.record_from_run(odir)
+        if learned:
+            payload["learnedMeasures"] = learned
+        # Credit any generalized pattern that was reused this run (promotion signal).
+        reused = DC.bump_pattern_hits(odir)
+        if reused:
+            payload["reusedPatterns"] = reused
     write_result(odir, payload)
     _print_banner(payload)
     return 0 if result.get("ok") else 2

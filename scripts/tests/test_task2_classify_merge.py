@@ -167,6 +167,32 @@ class TestClassify(unittest.TestCase):
         self.assertEqual(C._hint("DATEPARSE('yyyy', [x])"), "date-fn")
         self.assertIsNone(C._hint("SUM([x])"))
 
+    def test_dimension_role_calc_routes_as_calculated_column(self):
+        # A Tableau calc with role='dimension' (a discrete grouping/bin pill, e.g. a
+        # {FIXED [Cust]: COUNTD([Ord])} histogram axis) must be flagged targetKind
+        # 'calculatedColumn' so the agent authors it in calculatedColumns[], NOT as a
+        # measure -- otherwise the chart cannot put it on a category axis.
+        ir = _single_flat_ir()
+        ir["calculatedFields"].append({
+            "caption": "Nr of Orders per Customers", "fieldName": "[noc]",
+            "formula": "{ FIXED [Customer]: COUNTD([Order Id]) }",
+            "role": "dimension", "isLOD": True,
+            "dependsOn": ["Customer", "Order Id"],
+        })
+        result = C.classify(ir)
+        m = {x["caption"]: x for x in result["classification"]["measures"]}
+        self.assertEqual(m["Nr of Orders per Customers"]["targetKind"],
+                         "calculatedColumn")
+        self.assertEqual(m["Nr of Orders per Customers"]["route"], "agent")
+        # measure-role calcs keep targetKind 'measure'
+        self.assertEqual(m["Total Amount"]["targetKind"], "measure")
+        todo = {x["caption"]: x for x in result["agentTodo"]["measures"]}
+        entry = todo["Nr of Orders per Customers"]
+        self.assertEqual(entry["targetKind"], "calculatedColumn")
+        self.assertEqual(entry["role"], "dimension")
+        self.assertTrue(entry["isLOD"])
+        self.assertEqual(entry["dependsOn"], ["Customer", "Order Id"])
+
     @unittest.skipUnless(os.path.isfile(SALES_TWB), "Sales workbook not present")
     def test_real_sales_routes_schema_to_agent(self):
         ir = P.build_ir(SALES_TWB)
@@ -240,6 +266,64 @@ class TestMerge(unittest.TestCase):
         ir = _single_flat_ir()
         decisions = MG.merge(ir, {}, S.build_star(ir), {})
         self.assertEqual(MG.validate(decisions), [])
+
+    def test_cache_source_measure_survives_merge_and_validates(self):
+        # A measure replayed from the learned DAX cache carries source="cache".
+        # The merge must preserve that source (not coerce it to "llm") and the
+        # decisions schema must accept it, otherwise every cache-hit migration
+        # would hard-fail at the merge validation step.
+        ir = _single_flat_ir()
+        dax_partial = {"measures": [{
+            "table": "demo", "name": "Cached Total", "dax": "SUM(demo[Amount])",
+            "formatString": "0", "displayFolder": "Base Measures",
+            "description": None, "source": "cache"}]}
+        decisions = MG.merge(ir, dax_partial, S.build_star(ir), {})
+        by_name = {m["name"]: m for m in decisions["measures"]}
+        self.assertEqual(by_name["Cached Total"]["source"], "cache")
+        self.assertEqual(MG.validate(decisions), [])
+
+    def test_decisions_schema_allows_cache_source(self):
+        # Lock the enum independently of whether jsonschema is installed: the
+        # measure.source enum in the contract must list "cache".
+        schema_path = os.path.join(SCRIPTS, "contracts", "decisions_schema.json")
+        with open(schema_path, encoding="utf-8-sig") as fh:
+            schema = json.load(fh)
+        enum = (schema["properties"]["measures"]["items"]["properties"]
+                ["source"]["enum"])
+        self.assertIn("cache", enum)
+
+    def test_calc_column_referencing_measure_is_dropped(self):
+        # A calc column whose DAX references a MEASURE causes a "cyclic reference"
+        # at refresh (context transition). The merge must strip it deterministically
+        # while keeping calc columns that only reference physical columns.
+        ir = _star_ir()
+        agent_fragment = {
+            "tableStrategy": "star-schema",
+            "tables": [{"name": "Orders", "role": "fact"},
+                       {"name": "Customers", "role": "dim"}],
+            "measures": [{"table": "Orders", "name": "Selected Year",
+                          "dax": "SELECTEDVALUE ( 'Select Year'[Select Year], 2023 )",
+                          "source": "llm"}],
+            "calculatedColumns": [
+                {"table": "Orders", "name": "CY Customers",
+                 "dax": "IF ( YEAR ( Orders[Order Date] ) = [Selected Year], "
+                        "Orders[Customer ID] )", "dataType": "string"},
+                {"table": "Orders", "name": "Postal Code Key",
+                 "dax": "FORMAT ( Orders[Postal Code], \"0\" )", "dataType": "string"},
+            ],
+        }
+        decisions = MG.merge(ir, {}, None, agent_fragment)
+        kept = {c["name"] for c in decisions["calculatedColumns"]}
+        self.assertNotIn("CY Customers", kept)       # measure-ref -> dropped
+        self.assertIn("Postal Code Key", kept)        # column-only -> kept
+
+    def test_calc_column_measure_ref_helper(self):
+        # bare [Name] matching a measure -> flagged; a Table[Col] ref -> ignored.
+        self.assertEqual(
+            MG._calc_column_measure_ref("Orders[Sales] + [M]", {"M"}), "M")
+        self.assertIsNone(
+            MG._calc_column_measure_ref('FORMAT ( Orders[Postal Code], "0" )',
+                                        {"M"}))
 
 
 class TestMergeCli(unittest.TestCase):

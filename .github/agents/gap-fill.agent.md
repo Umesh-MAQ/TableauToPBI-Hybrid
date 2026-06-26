@@ -59,10 +59,39 @@ authority in skill `dax-measures/SKILL.md`. Highlights:
 - Reference real columns as `Table[Column]` and sibling measures as `[Measure Name]`.
 - Use `DIVIDE()` for any ratio. Pick a sensible `formatString` (`"#,0"`, `"#,0.00"`,
   `"0.0%"`, `"\$#,0"`).
+- **`targetKind` is authoritative — obey it.** Each todo entry carries `targetKind`
+  derived from the Tableau `role`:
+  - `targetKind: "measure"` → author in `measures[]` (an aggregate).
+  - `targetKind: "calculatedColumn"` → author in `calculatedColumns[]`, **never** as a
+    measure. These are row-level/grouping values Tableau keeps on the rows/cols shelf
+    as a discrete pill (role=`dimension`). Putting one in `measures` makes every visual
+    that uses it as an axis mis-bind, because a measure cannot group a chart.
+  - A per-entity LOD count used as a **binning/histogram axis** —
+    `{FIXED [Customer]: COUNTD([Order Id])}` (todo `isLOD: true`, `role: "dimension"`)
+    — is a calculated column on the entity it is FIXED by:
+    `{ "table": "Customers", "name": "Nr of Orders per Customers",
+       "dax": "CALCULATE(DISTINCTCOUNT(Orders[Order Id]))" }`.
+    The chart then puts that column on the category axis and a customer count on the
+    value axis, reproducing the Tableau distribution histogram (X = order-count
+    buckets, Y = number of customers).
+  - Use the todo `dependsOn` list to pick the right base columns/table for the DAX.
 - If a calc is really a row-level expression, put it in `calculatedColumns` instead —
   the reconcile guard accepts it there too.
 - **Every** measure caption in the todo MUST appear in your fragment (as a measure,
   calculated column, or field parameter), or generation will hard-fail.
+
+#### Ranked detail tables (e.g. "Top 10 Customers by Profit")
+
+When the IR shows a Top-N detail table that displays a **rank** and/or a **last/most-
+recent date** that has no model measure yet, author the missing helpers so the table
+matches the source:
+
+- **Rank column** → a measure `RANKX(ALLSELECTED(Dim[Name]), [Ranking Measure],, DESC)`
+  (rank by the same measure the Tableau Top-N ranks by — see the worksheet `topN`).
+- **Last/most-recent date** (Tableau `MAX([Order Date])` shown as a column) → a measure
+  `MAX(Orders[Order Date])` with a date `formatString`. Do **not** put the raw date
+  column in the table — that splits the table to one row per date.
+
 
 ### 3. Visual types (`visualDecisions`) — one per ambiguous worksheet
 

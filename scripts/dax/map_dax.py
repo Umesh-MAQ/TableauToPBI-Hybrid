@@ -34,6 +34,7 @@ from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dax_expr as E  # noqa: E402
+import dax_cache  # noqa: E402  # learned formula->DAX "notepad" (graduation layer 1)
 
 # Single-aggregation patterns: Tableau func -> DAX func
 AGG_MAP = {
@@ -77,6 +78,9 @@ ATTR_RE = re.compile(r"^\s*ATTR\s*\(\s*\[([^\]]+)\]\s*\)\s*$", re.IGNORECASE)
 # constant: [Select Year], [Select Year]-1, [Select Year] + 2, [Select Year]*100.
 PARAM_REF_RE = re.compile(
     r"^\s*\[([^\]]+)\]\s*(?:([+\-*/])\s*(\d+(?:\.\d+)?))?\s*$")
+# A bare positive integer constant -- the Tableau "Number of Records" row-count
+# idiom (the legacy field is literally defined as 1 and aggregated with SUM).
+CONST_INT_RE = re.compile(r"^\s*(\d+)\s*$")
 
 # Any single "AGG([Field])" token anywhere in a formula (used by the generalized
 # ratio / arithmetic handlers below).
@@ -96,18 +100,38 @@ _ARITH_RESIDUAL_RE = re.compile(r"^[\s0-9.+\-*/()]*$")
 
 
 def _h_single_agg(formula, table, columns, measures):
-    """SUM([x]) -> SUM ( T[x] ). Ungated (back-compat)."""
+    """SUM([x]) -> SUM ( T[x] ).
+
+    Column-gated when a column set is supplied: aggregating a token that is not a
+    real base column (a sibling calc-field *measure* or a parameter) is invalid
+    DAX -- e.g. SUM([Normalized Amount]) where ``Normalized Amount`` is itself a
+    measure becomes SUM ( T[Normalized Amount] ), a reference to a non-existent
+    column. Such formulas defer to the agent instead. Stays ungated when no column
+    set is supplied (back-compat).
+    """
     m = SINGLE_AGG_RE.match(formula)
     if not m:
+        return None
+    if columns and m.group(2) not in columns:
         return None
     func = AGG_MAP[m.group(1).upper()]
     return f"{func} ( {table}[{m.group(2)}] )", FORMAT_BY_AGG.get(func)
 
 
 def _h_ratio_sum(formula, table, columns, measures):
-    """SUM([a]) / SUM([b]) -> DIVIDE(...). Ungated (back-compat)."""
+    """SUM([a]) / SUM([b]) -> DIVIDE(...).
+
+    Column-gated when a column set is supplied: both operands must be real base
+    columns, so a ratio over a sibling calc-field *measure* (e.g.
+    SUM([profit]) / SUM([Normalized Amount])) never emits
+    SUM ( T[Normalized Amount] ) against a non-existent column -- it defers to the
+    agent, which references the measure as a bare [Normalized Amount]. Stays
+    ungated when no column set is supplied (back-compat).
+    """
     m = RATIO_RE.match(formula)
     if not m:
+        return None
+    if columns and (m.group(1) not in columns or m.group(2) not in columns):
         return None
     dax = f"DIVIDE ( SUM ( {table}[{m.group(1)}] ), SUM ( {table}[{m.group(2)}] ) )"
     return dax, "#,0.00"
@@ -198,6 +222,25 @@ def _h_passthrough(formula, table, columns, measures):
     return f"{table}[{m.group(1)}]", None
 
 
+def _h_row_count(formula, table, columns, measures):
+    """Bare integer constant (e.g. ``1``) -> COUNTROWS row-count measure.
+
+    Tableau's legacy 'Number of Records' calc field is defined as the constant 1
+    and aggregated with SUM, which yields the datasource row count. SUM of a
+    constant N equals N * COUNTROWS(table); for the canonical N==1 this is just
+    COUNTROWS(table). Homed on the host (fact) table so the row-count measure is
+    valid, deterministic DAX instead of being routed to the agent. Constants never
+    reference a column, so this is independent of the column set.
+    """
+    m = CONST_INT_RE.match(formula)
+    if not m:
+        return None
+    tok = table if re.fullmatch(r"\w+", table) else f"'{table}'"
+    n = int(m.group(1))
+    dax = f"COUNTROWS ( {tok} )" if n == 1 else f"{n} * COUNTROWS ( {tok} )"
+    return dax, "#,0"
+
+
 def _param_default_literal(param: Dict) -> str:
     """DAX literal for a parameter's default value (numeric bare, else quoted)."""
     default = param.get("default")
@@ -269,6 +312,7 @@ PATTERN_REGISTRY = [
     _h_agg_arithmetic,
     _h_attr,
     _h_passthrough,
+    _h_row_count,
     _h_expression,
 ]
 
@@ -340,6 +384,8 @@ def build_measures(ir: Dict, host_table: str) -> Dict[str, List[Dict]]:
     translated: List[Dict] = []
     pending: List[Dict] = []
     columns = _base_columns(ir)
+    col_types = {c["name"]: c.get("dataType") for c in ir.get("columns", [])
+                 if c.get("name")}
     ref_all = _measure_refs(ir)
     params = {p["name"]: p for p in ir.get("parameters", []) if p.get("name")}
     for field in ir.get("calculatedFields", []):
@@ -348,6 +394,16 @@ def build_measures(ir: Dict, host_table: str) -> Dict[str, List[Dict]]:
         self_internal = (field.get("fieldName") or "").strip("[]")
         refs = {k: v for k, v in ref_all.items() if k != self_internal}
         result = translate(formula, host_table, columns, refs, params)
+        source = "template"
+        if result is None and field.get("suggestedDaxKind", "measure") == "measure":
+            # The registry could not handle it — consult the learned cache before
+            # routing to the agent. A hit is a formula the agent already solved and
+            # whose DAX was validated; reuse skips the AI for it entirely.
+            cached = dax_cache.lookup(formula, host_table, set(columns or []),
+                                      col_types)
+            if cached is not None:
+                result = cached
+                source = "cache"
         if result and field.get("suggestedDaxKind", "measure") == "measure":
             dax, fmt = result
             translated.append({
@@ -357,7 +413,7 @@ def build_measures(ir: Dict, host_table: str) -> Dict[str, List[Dict]]:
                 "formatString": fmt,
                 "displayFolder": "Base Measures",
                 "description": None,
-                "source": "template",
+                "source": source,
             })
         else:
             pending.append({

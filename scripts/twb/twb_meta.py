@@ -90,10 +90,21 @@ def extract_hierarchies(root: ET.Element) -> List[Dict]:
             continue
         ds_caption = X.datasource_caption(ds)
         for path in ds.iter("drill-path"):
+            name = X.attr(path, "name", "Hierarchy")
             levels = [X.strip_brackets(f.text) for f in path.findall("field") if f.text]
+            if not levels:
+                # Compact form: <drill-path name='Country_Region, State, City' />
+                # carries the ordered levels in the name attribute with NO child
+                # <field> elements. Recover the levels by splitting on commas so
+                # this hierarchy is not silently dropped (the verbose <field> form
+                # above remains the primary path for workbooks that use it).
+                parts = [X.strip_brackets(p.strip())
+                         for p in name.split(",") if p.strip()]
+                if len(parts) >= 2:
+                    levels = parts
             if levels:
                 out.append({
-                    "name": X.attr(path, "name", "Hierarchy"),
+                    "name": name,
                     "datasource": ds_caption,
                     "levels": levels,
                 })
