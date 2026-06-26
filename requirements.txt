@@ -4,3 +4,16 @@
 # Stricter JSON Schema validation of decisions.json / fragments
 # (the engine falls back to a minimal required-key check when absent).
 jsonschema>=4.0
+
+# Validation workbook: writes the single Excel validation workbook
+# (Summary / Visual Mapping / Measure Validation / Filter Validation /
+# Iterations) and embeds the side-by-side Tableau vs Power BI screenshots.
+# Required for `python scripts/migrate.py validate ...`; the rest of the
+# engine remains standard-library only.
+openpyxl>=3.1
+# Pillow lets openpyxl embed the screenshot images into the workbook. Without
+# it the workbook still builds but every screenshot cell is a placeholder.
+# The Tableau pane is the real worksheet/dashboard thumbnail decoded from the
+# .twb (stdlib base64/zipfile — no extra deps); the Power BI pane is a real
+# Power BI Desktop capture the user drops into validation/screenshots/.
+Pillow>=10.0

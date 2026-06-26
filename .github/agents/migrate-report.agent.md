@@ -71,7 +71,55 @@ validators in parallel.
   the exact error, correct `agent-fragment.json`, and re-run `finish`. Never edit the
   emitted TMDL/PBIR by hand.
 
-### Step 4 — Verify & report
+`finish` also runs one **validation iteration** automatically and writes the single
+validation workbook (see Step 4).
+
+### Step 4 — Validate (iterate against the single workbook)
+
+Migration fidelity is proven in a **single Excel validation workbook** that is
+created once and updated every iteration — never regenerated:
+
+```powershell
+python scripts/migrate.py validate "$ARGUMENTS"
+```
+
+This builds/updates `Output/<Model>/validation/<Model>_Validation.xlsx` with five
+sheets — **Summary**, **Visual Mapping** (strict one-to-one Tableau→Power BI visual
+check, Exact/Similar/Missing/Extra), **Measure Validation** (Tableau formula vs DAX:
+business logic, aggregation, null handling, conditional, time intelligence,
+parameter dependency), **Filter Validation** (filters/slicers/parameters with
+side-by-side screenshot evidence), and **Iterations** (full history) — plus
+`validation/validation_result.json`.
+
+**Screenshot evidence (requirement #1 / #6).** Screenshots are **real captures**,
+never synthetic. The **Tableau pane** is the genuine worksheet/dashboard thumbnail
+Tableau Desktop embedded in the `.twb` — `validate` decodes it (stdlib
+base64/zipfile) and writes `<key>_tableau.png`. Tableau only stores thumbnails for
+a subset of sheets (dashboards + active sheets), so some visuals get a real Tableau
+image and the rest show a placeholder. The **Power BI pane** is **not** generated:
+open the produced `.pbip` in Power BI Desktop, capture each page, and drop
+`<key>_powerbi.png` into `Output/<Model>/validation/screenshots/` — the workbook
+prints the exact expected filename in each empty cell, then embeds the capture on
+the next `validate`. User-supplied PNGs (either side) are never overwritten, so a
+real full-res Tableau Desktop capture also overrides the extracted thumbnail. The
+workbook is a standalone evidence document — no external image folder needed to
+review it. Keep the workbook closed in Excel while running `validate`; a
+locked file makes the run write a timestamped copy instead of updating in place.
+
+**Iteration loop + early termination (requirements #2 / #3).** Read the validator
+exit code / `validation_result.json.status`:
+
+- `validated` (rc 0) — no unresolved issues. Done; go to Step 5.
+- `issues_found` (rc 6) — correct the root cause (fix `agent-fragment.json`, re-run
+  `finish`), then run `validate` again. The SAME workbook is updated and a new
+  Iterations row is appended.
+- `stopped_early` (rc 8) — the same unresolved issue(s) reappeared in two consecutive
+  iterations with no measurable improvement. **Stop. Do not iterate again and do not
+  regenerate the PBIP.** The workbook's Summary already records the root cause, why
+  auto-correction was not possible, and the recommended manual action — surface those
+  to the user.
+
+### Step 5 — Verify & report
 
 The migration is done only when `MIGRATION_RESULT.json` has `status: "complete"` and
 every validator shows `0 error(s)`. Then tell the user:
@@ -88,3 +136,5 @@ every validator shows `0 error(s)`. Then tell the user:
 - Do not touch the constitution files in `.specify/memory/`.
 - If the same validator fails 3 times, stop and surface the precise error to the user
   instead of looping.
+- Keep ONE validation workbook per model; never create a second. Stop iterating the
+  moment `validate` reports `stopped_early`.
