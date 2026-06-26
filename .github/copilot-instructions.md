@@ -31,7 +31,31 @@ If the user did not name a folder, look under `Data/` for a folder containing a
    `agent-fragment.json`. This is the ONLY artifact the AI authors.
 3. `python scripts/migrate.py finish "<folder>"` — deterministic: merge the fragment,
    emit the TMDL model and PBIR report **in parallel**, run all validators **in
-   parallel**, write the final `MIGRATION_RESULT.json`.
+   parallel**, write the final `MIGRATION_RESULT.json`. `finish` also runs one
+   validation iteration automatically.
+4. `python scripts/migrate.py validate "<folder>"` — build/update the **single**
+   `Output/<Model>/validation/<Model>_Validation.xlsx` (Summary, Visual Mapping,
+   Measure Validation, Filter Validation with embedded side-by-side screenshots,
+   Iterations). Re-run it each cycle: it appends an Iterations row and stops early
+   (`status: stopped_early`) when the same unresolved issues repeat twice.
+   **Screenshots are REAL captures, never synthetic.** The Tableau pane is the
+   genuine worksheet/dashboard thumbnail Tableau Desktop embedded in the `.twb`
+   (decoded with stdlib base64/zipfile and written as `<key>_tableau.png`). Note
+   Tableau only stores thumbnails for a subset of sheets (dashboards + active
+   sheets), so some visuals get a real Tableau image and others show a placeholder.
+   The Power BI pane is a **real Power BI Desktop capture**: `validate` launches
+   the produced `.pbip` in Power BI Desktop and screenshots each report page with
+   the Win32 `PrintWindow` API (`PW_RENDERFULLCONTENT`), writing
+   `page_<page>_powerbi.png` and assigning each page's capture to every visual/
+   filter on it (`<key>_powerbi.png`). Page selection is deterministic — the
+   emitter's `activePageName` in `pages.json` is set to each page in turn and the
+   report is relaunched, since Power BI Desktop has no reliable keyboard/CLI page
+   switch. Already-captured `page_*_powerbi.png` files are reused on the next run
+   (delete them to force a fresh Desktop capture); set `PBI_CAPTURE=0` to skip
+   capture entirely. User-supplied PNGs (either side) are never overwritten, so
+   real full-res captures override the auto-captures. Keep the workbook **closed
+   in Excel** while running `validate`; if it is open/locked the run writes a
+   timestamped copy instead of updating in place.
 
 ## Hard rules
 
@@ -43,6 +67,9 @@ If the user did not name a folder, look under `Data/` for a folder containing a
   (schema `scripts/contracts/fragment_schema.json`).
 - A migration is **done** only when `MIGRATION_RESULT.json` has `status: "complete"`
   and every validator reports `0 error(s)`.
+- **One validation workbook per model.** It is created once and updated in place every
+  iteration — never start a second one. Stop iterating when `validate` reports
+  `stopped_early`; document the root cause + manual action rather than looping.
 
 ## Setup (once)
 

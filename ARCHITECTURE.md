@@ -57,6 +57,7 @@ a build, but the gap-fill agent resolves them for fidelity.
 | `scripts/emit/` | `emit_tmdl.py` (semantic model) + `emit_pbir.py` (report). The only writers of TMDL/PBIR. |
 | `scripts/contracts/` | JSON Schemas for the IR, classification, fragment, and decisions artifacts. |
 | `scripts/validate_semantics.py`, `emit/validate_bindings.py`, `plugins/pbip/.../validate_pbip.py`, `plugins/pbip/hooks/bin/tmdl-validate-*` | The four validation gates. |
+| `scripts/validate/` | **Post-generate validation + single workbook.** Compares the IR against the emitted PBIR/TMDL (visual mapping, measure, filter), maintains the one `Output/<Model>/validation/<Model>_Validation.xlsx` across iterations with embedded side-by-side screenshot evidence (real Tableau thumbnails decoded from the `.twb`; Power BI panes are real Desktop captures dropped in by the user), and enforces early termination on repeated unresolved issues. Run via `migrate.py validate`. |
 | `.github/agents/migrate-report.agent.md` | The orchestrator agent Copilot invokes. |
 | `.github/agents/gap-fill.agent.md` | The single gap-fill agent (DAX + schema + visuals fused). |
 | `.github/copilot-instructions.md` | Routes "migrate this report" to the orchestrator. |

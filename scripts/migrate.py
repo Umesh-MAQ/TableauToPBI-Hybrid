@@ -69,6 +69,7 @@ VALIDATE_BINDINGS = os.path.join(HERE, "emit", "validate_bindings.py")
 VALIDATE_PBIP = os.path.join(
     HERE, "..", "plugins", "pbip", "skills", "pbip", "scripts", "validate_pbip.py")
 SEM_VALIDATE = os.path.join(HERE, "validate_semantics.py")
+VALIDATE_MIGRATION = os.path.join(HERE, "validate", "validate_migration.py")
 BIN_DIR = os.path.join(HERE, "..", "plugins", "pbip", "hooks", "bin")
 
 PY = sys.executable
@@ -664,6 +665,22 @@ def cmd_generate(args) -> int:
     return _finish_generate(analysis, decisions, odir, twb, mode="manual")
 
 
+def cmd_validate(args) -> int:
+    """Run one validation iteration against an already-generated migration.
+
+    Returns the validator's own exit code (0 validated / 6 issues / 8 stopped /
+    2 error) so a caller can drive the iteration loop, while `run`/`finish` keep
+    validation strictly advisory.
+    """
+    twb = discover_twb(args.target)
+    odir = out_dir_for(args.output_root, twb)
+    if not os.path.isfile(os.path.join(odir, "analysis.json")):
+        print(f"ERROR: nothing generated under {odir}; run migrate first.",
+              file=sys.stderr)
+        return 2
+    return _echo([PY, VALIDATE_MIGRATION, odir])
+
+
 def _finish_generate(analysis: str, decisions: str, odir: str,
                      twb: str, mode: str) -> int:
     # Output-first re-gate guard (single choke point for run-reuse, finish and
@@ -722,6 +739,10 @@ def _finish_generate(analysis: str, decisions: str, odir: str,
         payload["failedStage"] = result.get("stage")
         payload["log"] = result.get("log", "")[-2000:]
     else:
+        # Post-generate validation iteration: build/update the single validation
+        # workbook (visual mapping + measure + filter checks with side-by-side
+        # screenshot evidence). Advisory — never fails an otherwise-valid emit.
+        payload["validationWorkbook"] = _run_validation(odir)
         # The .pbip built and every validator was green: this is the only moment a
         # formula->DAX mapping is known-good. Teach the cache the agent's solutions
         # so identical calcs route as deterministic next time (zero AI cost).
@@ -735,6 +756,27 @@ def _finish_generate(analysis: str, decisions: str, odir: str,
     write_result(odir, payload)
     _print_banner(payload)
     return 0 if result.get("ok") else 2
+
+
+def _run_validation(odir: str) -> Optional[str]:
+    """Run one validation iteration (advisory). Returns the workbook path or None.
+
+    Maintains the SINGLE lifecycle workbook and the iteration history under
+    ``<odir>/validation/``. Honours early termination (rc==8) internally; here it
+    is non-blocking so a validation finding never breaks a valid migration.
+    """
+    if not os.path.isfile(VALIDATE_MIGRATION):
+        return None
+    rc, out = _run([PY, VALIDATE_MIGRATION, odir])
+    print(f"\n--- validate:migration (rc={rc}) ---\n{out}")
+    res = os.path.join(odir, "validation", "validation_result.json")
+    if os.path.isfile(res):
+        try:
+            with open(res, encoding="utf-8-sig") as fh:
+                return json.load(fh).get("workbook")
+        except Exception:
+            return None
+    return None
 
 
 def main(argv=None) -> int:
@@ -758,6 +800,12 @@ def main(argv=None) -> int:
     pg.add_argument("--output-root", default="Output")
     pg.add_argument("--decisions", default=None)
     pg.set_defaults(func=cmd_generate)
+
+    pv = sub.add_parser("validate", help="run one validation iteration + update the "
+                        "single validation workbook")
+    pv.add_argument("target")
+    pv.add_argument("--output-root", default="Output")
+    pv.set_defaults(func=cmd_validate)
 
     args = p.parse_args(argv)
     try:
