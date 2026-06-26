@@ -864,16 +864,22 @@ def _full_page_capture(img, page_json: str, page_w: float, page_h: float,
             return page_img, scale, page_w
 
     # Last resort before a clipped crop: WIDEN + relaunch. This invalidates the
-    # original window handle, so it runs only after the window-based methods. It
-    # returns a result ONLY when verified COMPLETE (never a misaligned partial).
-    try:
-        widened = _widen_capture(img, page_json, page_w, page_h, pbip_path,
-                                 model_name, launch_timeout, render_settle, CROP)
-    except Exception as exc:                    # noqa: BLE001 — fall through
-        print(f"    widen failed ({exc})")
-        widened = None
-    if widened is not None:
-        return widened
+    # original window handle and RE-OPENS Power BI Desktop, so by default it is
+    # disabled — the whole point is to open the report exactly ONCE per page and
+    # capture every visual from that single render. The in-place window resizes
+    # above (scroll-stitch / narrow-window / zoom-out) already produce a complete
+    # full-height page without any relaunch. Set ``PBI_ALLOW_RELAUNCH=1`` to opt
+    # back into the widen fallback for an unusually tall page on a tiny monitor.
+    if os.environ.get("PBI_ALLOW_RELAUNCH") == "1":
+        try:
+            widened = _widen_capture(img, page_json, page_w, page_h, pbip_path,
+                                     model_name, launch_timeout, render_settle,
+                                     CROP)
+        except Exception as exc:                # noqa: BLE001 — fall through
+            print(f"    widen failed ({exc})")
+            widened = None
+        if widened is not None:
+            return widened
 
     # Last resort: keep whatever native page crop we can get.
     ci = CROP.clean_page_image(img, page_w)
@@ -998,13 +1004,35 @@ def _restore_text(path: str, raw: Optional[str]) -> None:
 # --------------------------------------------------------------------------- #
 # public entry point
 # --------------------------------------------------------------------------- #
+def _refresh_report(hwnd: int) -> None:
+    """Trigger a data refresh in Power BI Desktop (Home ▸ Refresh, hotkey F5).
+
+    F5 refreshes every query/visual in the open report, so the canvas we capture
+    reflects freshly-loaded data rather than whatever was cached on open. Sent as
+    a foreground keystroke after the window is focused; refreshing CSV-backed
+    models is cheap, and a no-op refresh is harmless.
+    """
+    VK_F5 = 0x74
+    KEYEVENTF_KEYUP = 0x2
+    _force_foreground(hwnd)
+    time.sleep(1)
+    user32.keybd_event(VK_F5, 0, 0, 0)
+    user32.keybd_event(VK_F5, 0, KEYEVENTF_KEYUP, 0)
+
+
 def _render_and_capture(hwnd: int, render_settle: int):
-    """Foreground the window, wait for the canvas to render, and capture it.
+    """Foreground the window, REFRESH the report, wait for it to finish
+    rendering, then capture it.
+
+    Power BI Desktop is told to refresh (F5) once the window is focused so the
+    captured canvas shows freshly-loaded data. We then wait for the refresh +
+    visual render to settle before grabbing a non-blank image.
 
     Returns a non-blank window image of a sensible size, or ``None`` if the
     report never finished rendering in time.
     """
     _force_foreground(hwnd)
+    _refresh_report(hwnd)        # refresh first, then wait for it to complete
     time.sleep(render_settle)
     img = None
     for _ in range(20):          # wait for data + visuals to render
