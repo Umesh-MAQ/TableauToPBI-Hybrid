@@ -741,23 +741,103 @@ def _scroll_stitch_capture(hwnd: int, page_w: float, page_h: float, CROP):
     return CROP._neutralize_sentinel(strip), scale
 
 
+def _widen_capture(img, page_json: str, page_w: float, page_h: float,
+                   pbip_path: str, model_name: str, launch_timeout: int,
+                   render_settle: float, CROP):
+    """Capture the COMPLETE page by widening its logical width and relaunching.
+
+    Power BI Desktop fits the page to the viewport WIDTH, so a page taller than
+    the canvas is clipped at the fold. Widening the page (adding empty margin on
+    the right) lowers the fit-to-width scale until the FULL logical height fits
+    the viewport — giving a single uniform-scale capture of every visual. The
+    target width is chosen so the resulting scale is the best possible that still
+    fits the height (≈ ``viewport_h / page_h``), which is far sharper than
+    shrinking the window. The page's logical width is ALWAYS restored before
+    returning, so a temporary widen can never persist into the emitted report.
+
+    Returns ``(page_img, scale, eff_width)`` or None.
+    """
+    target = _widen_target(img, page_w, page_h)
+    if not target or target <= page_w + 1:
+        return None
+    try:
+        for attempt in range(4):
+            print(f"    widening page to fit (attempt {attempt + 1}, "
+                  f"width={int(round(target))})")
+            _set_page_width(page_json, target)
+            # Force a genuinely fresh render: the on-disk width change is only
+            # picked up by a brand-new window, so close any open report first and
+            # wait for a NEW window (never reattach to the stale native render).
+            hwnd2 = _launch_and_wait(pbip_path, model_name, launch_timeout,
+                                     force_fresh=True)
+            if not hwnd2:
+                break
+            img2 = _render_and_capture(hwnd2, render_settle)
+            if img2 is None:
+                target *= 1.3
+                continue
+            r2 = CROP.clean_page_full(img2, page_h, target)
+            if not r2:
+                target *= 1.3                  # page rect not found — widen more
+                continue
+            page_img, scale, complete = r2
+            if complete:                       # full height ⇒ scale is correct
+                eff_w = (page_img.width / scale) if scale else target
+                print(f"    full page captured (scale={scale:.3f}, "
+                      f"{page_img.height}px tall)")
+                return page_img, scale, eff_w
+            # Not complete yet — widen further. We never return a PARTIAL widen:
+            # its scale is derived from the widened logical width but the render
+            # is still clipped, so using it would misplace the bottom visuals.
+            # If widening can't complete (e.g. side panes shrink the canvas), the
+            # caller falls back to the narrow-window capture, which keeps the page
+            # at native width and therefore always crops the correct visual.
+            target *= 1.3
+        print("    widen could not capture the full height; "
+              "falling back to window-fit capture")
+        return None
+    finally:
+        _set_page_width(page_json, page_w)     # never leave the page widened
+
+
 def _full_page_capture(img, page_json: str, page_w: float, page_h: float,
                        pbip_path: str, model_name: str, launch_timeout: int,
                        render_settle: float, CROP, hwnd: Optional[int] = None):
     """Return ``(page_image, scale, eff_width)`` for the WHOLE page.
 
-    If the native render already shows the full page it is used as-is. Otherwise
-    the page is captured at native Fit-to-Width resolution by scrolling the
-    canvas and stitching the tiles (works on any monitor). Only if that fails do
-    we fall back to widening the page's logical width and relaunching Power BI
-    Desktop (lower resolution but complete). The returned ``scale`` is
-    height-consistent so every visual crops at its original logical rectangle.
+    Order of preference (correct alignment first, then resolution):
+      1. the native Fit-to-Width render, if it already shows the full page;
+      2. SCROLL + STITCH — scroll the native Fit-to-Width canvas and stitch the
+         tiles. This keeps the page at native resolution (~0.71 scale, sharp) AND
+         at its native logical width, so every visual crops correctly at full
+         quality. Preferred whenever the canvas can scroll;
+      3. narrow-window / zoom-out — deterministic window resizes (no relaunch)
+         that keep the page at native logical width, so crops stay aligned even
+         though the page is rendered smaller (lower resolution but correct);
+      4. WIDEN + relaunch — last resort. Only ever accepted when the capture is
+         verified COMPLETE (full height with a bottom sentinel margin), never as
+         a partial — a partial widen would misplace the bottom visuals.
+
+    The returned ``scale`` is height-consistent so every visual crops at its
+    original logical rectangle.
     """
     full = CROP.clean_page_full(img, page_h, page_w)
     if full and full[2]:                       # native render already complete
         print(f"    page fits viewport natively (scale={full[1]:.3f}, "
               f"{full[0].height}px tall)")
         return full[0], full[1], page_w
+
+    if hwnd:                                    # native-resolution scroll+stitch
+        try:                                    # (sharp, complete, aligned)
+            stitched = _scroll_stitch_capture(hwnd, page_w, page_h, CROP)
+        except Exception as exc:               # noqa: BLE001 — fall through
+            print(f"    scroll-stitch failed ({exc})")
+            stitched = None
+        if stitched is not None:
+            page_img, scale = stitched
+            print(f"    scroll-stitched full page at native resolution "
+                  f"(scale={scale:.3f}, {page_img.height}px tall)")
+            return page_img, scale, page_w
 
     if hwnd:                                    # narrow the window so the page
         try:                                    # fits the canvas height (uniform,
@@ -783,77 +863,30 @@ def _full_page_capture(img, page_json: str, page_w: float, page_h: float,
                   f"{page_img.height}px tall)")
             return page_img, scale, page_w
 
-    if hwnd:                                    # native-resolution scroll+stitch
+    # Last resort before a clipped crop: WIDEN + relaunch. This invalidates the
+    # original window handle and RE-OPENS Power BI Desktop, so by default it is
+    # disabled — the whole point is to open the report exactly ONCE per page and
+    # capture every visual from that single render. The in-place window resizes
+    # above (scroll-stitch / narrow-window / zoom-out) already produce a complete
+    # full-height page without any relaunch. Set ``PBI_ALLOW_RELAUNCH=1`` to opt
+    # back into the widen fallback for an unusually tall page on a tiny monitor.
+    if os.environ.get("PBI_ALLOW_RELAUNCH") == "1":
         try:
-            stitched = _scroll_stitch_capture(hwnd, page_w, page_h, CROP)
-        except Exception as exc:               # noqa: BLE001 — fall back to widen
-            print(f"    scroll-stitch failed ({exc}); falling back to widen")
-            stitched = None
-        if stitched is not None:
-            page_img, scale = stitched
-            print(f"    scroll-stitched full page (scale={scale:.3f}, "
-                  f"{page_img.height}px tall)")
-            return page_img, scale, page_w
+            widened = _widen_capture(img, page_json, page_w, page_h, pbip_path,
+                                     model_name, launch_timeout, render_settle,
+                                     CROP)
+        except Exception as exc:                # noqa: BLE001 — fall through
+            print(f"    widen failed ({exc})")
+            widened = None
+        if widened is not None:
+            return widened
 
-    target = _widen_target(img, page_w, page_h)
-    if not target or target <= page_w + 1:
-        # cannot widen — keep whatever native page crop we can get
-        ci = CROP.clean_page_image(img, page_w)
-        if ci:
-            print("    page taller than viewport; widen unavailable")
-            return ci[0], ci[1], page_w
-        return None
-
-    # Widen + relaunch until the FULL page height fits the viewport. Power BI
-    # honours Fit-to-Page on a large window (the whole page then fits with the
-    # native scale and ``complete`` is already True above), so this fallback is
-    # only reached on small viewports where the page is still clipped. Each retry
-    # widens further; ``complete`` is judged by aspect ratio (see clean_page_full).
-    # The page's logical width is ALWAYS restored before returning so a temporary
-    # widen can never persist into the emitted report.
-    best = None                                # (page_img, scale, eff_w)
-    try:
-        for attempt in range(4):
-            print(f"    widening page to fit (attempt {attempt + 1}, "
-                  f"width={int(round(target))})")
-            _set_page_width(page_json, target)
-            _close_all_report_windows(model_name)
-            hwnd2 = _launch_and_wait(pbip_path, model_name, launch_timeout)
-            if not hwnd2:
-                break
-            img2 = _render_and_capture(hwnd2, render_settle)
-            if img2 is None:
-                target *= 1.3
-                continue
-            if os.environ.get("PBI_DEBUG"):
-                try:
-                    img2.save(f"_raw_widen_{attempt + 1}.png")
-                    rect = CROP.find_page_by_sentinel(img2)
-                    print(f"      [debug] raw={img2.size} rect={rect}")
-                except Exception as exc:  # noqa: BLE001
-                    print(f"      [debug] {exc}")
-            r2 = CROP.clean_page_full(img2, page_h, target)
-            if not r2:
-                target *= 1.3                  # page rect not found — widen more
-                continue
-            page_img, scale, complete = r2
-            eff_w = (page_img.width / scale) if scale else target
-            if complete:                       # full height ⇒ scale is correct
-                print(f"    full page captured (scale={scale:.3f}, "
-                      f"{page_img.height}px tall)")
-                return page_img, scale, eff_w
-            # Cut off — remember the tallest so far and widen further.
-            if best is None or page_img.height > best[0].height:
-                best = (page_img, scale, eff_w)
-            target *= 1.3
-
-        if best is not None:
-            print(f"    using best partial capture ({best[0].height}px tall)")
-            return best
-        ci = CROP.clean_page_image(img, page_w)
-        return (ci[0], ci[1], page_w) if ci else None
-    finally:
-        _set_page_width(page_json, page_w)     # never leave the page widened
+    # Last resort: keep whatever native page crop we can get.
+    ci = CROP.clean_page_image(img, page_w)
+    if ci:
+        print("    page taller than viewport; using clipped native crop")
+        return ci[0], ci[1], page_w
+    return None
 
 
 def _report_pages(out_dir: str, model_name: str) -> List[str]:
@@ -971,13 +1004,35 @@ def _restore_text(path: str, raw: Optional[str]) -> None:
 # --------------------------------------------------------------------------- #
 # public entry point
 # --------------------------------------------------------------------------- #
+def _refresh_report(hwnd: int) -> None:
+    """Trigger a data refresh in Power BI Desktop (Home ▸ Refresh, hotkey F5).
+
+    F5 refreshes every query/visual in the open report, so the canvas we capture
+    reflects freshly-loaded data rather than whatever was cached on open. Sent as
+    a foreground keystroke after the window is focused; refreshing CSV-backed
+    models is cheap, and a no-op refresh is harmless.
+    """
+    VK_F5 = 0x74
+    KEYEVENTF_KEYUP = 0x2
+    _force_foreground(hwnd)
+    time.sleep(1)
+    user32.keybd_event(VK_F5, 0, 0, 0)
+    user32.keybd_event(VK_F5, 0, KEYEVENTF_KEYUP, 0)
+
+
 def _render_and_capture(hwnd: int, render_settle: int):
-    """Foreground the window, wait for the canvas to render, and capture it.
+    """Foreground the window, REFRESH the report, wait for it to finish
+    rendering, then capture it.
+
+    Power BI Desktop is told to refresh (F5) once the window is focused so the
+    captured canvas shows freshly-loaded data. We then wait for the refresh +
+    visual render to settle before grabbing a non-blank image.
 
     Returns a non-blank window image of a sensible size, or ``None`` if the
     report never finished rendering in time.
     """
     _force_foreground(hwnd)
+    _refresh_report(hwnd)        # refresh first, then wait for it to complete
     time.sleep(render_settle)
     img = None
     for _ in range(20):          # wait for data + visuals to render
@@ -989,6 +1044,65 @@ def _render_and_capture(hwnd: int, render_settle: int):
     if img is None or _looks_blank(img) or img.size[0] < 600 or img.size[1] < 400:
         return None
     return img
+
+
+def _native_fit_layer(img, page_w: float, page_h: float, CROP):
+    """High-resolution Fit-to-Width layer, aligned to the page's true top-left.
+
+    Power BI Desktop fits the page to the canvas WIDTH and, on a fresh render,
+    scrolls it to the top, so the page sits at the top of the canvas with its
+    magenta outspace forming a margin around it (a page taller than the canvas is
+    clipped at the fold ⇒ no bottom margin). ``clean_page_image`` locates the
+    page precisely from that sentinel margin, so its top-left is the page's
+    logical (0, 0) and per-visual crops line up. We return that sharp page image
+    plus the visible logical height (``page_px_height / scale``) so the cropper
+    knows which visuals are present (the rest fall back to the complete layer).
+    Returns ``(page_img, scale, max_logical_y)`` or None.
+    """
+    hi = CROP.clean_page_image(img, page_w)
+    if not hi:
+        return None
+    page_img, scale = hi
+    if not scale:
+        return None
+    max_y = page_img.height / scale
+    return page_img, scale, max_y
+
+
+def _full_page_layers(img, page_json: str, page_w: float, page_h: float,
+                      pbip_path: str, model_name: str, launch_timeout: int,
+                      render_settle: float, CROP, hwnd: Optional[int] = None):
+    """Return one or more ``(page_img, scale, max_logical_y)`` capture LAYERS.
+
+    Each visual is later cropped from the HIGHEST-resolution layer in which it is
+    fully visible (``visual_bottom <= layer.max_logical_y``). This gives sharp
+    per-visual crops on a small monitor instead of squeezing the whole page into
+    one tiny image:
+
+      * Layer 1 — the native Fit-to-Width render. Top-aligned at logical (0, 0),
+        so crops are correctly placed; sharp (~0.7 scale) but a page taller than
+        the canvas is clipped at the fold, so only the upper visuals are present.
+      * Layer 2 — a complete whole-page capture (narrow-window / widen fallback).
+        Lower resolution but the FULL height, so the clipped bottom visuals still
+        get a real (if smaller) crop.
+
+    On a large enough monitor layer 1 is already complete, so layer 2 is the same
+    page and every visual crops from the sharp layer. Layers are ordered
+    highest-resolution first.
+    """
+    layers = []
+    hi = _native_fit_layer(img, page_w, page_h, CROP)   # sharp, top-aligned
+    if hi:
+        layers.append(hi)
+    full = _full_page_capture(img, page_json, page_w, page_h, pbip_path,
+                              model_name, launch_timeout, render_settle,
+                              CROP, hwnd)
+    if full:
+        page_img, scale, _ = full
+        # +1 so the comparison ``visual_bottom <= max_y`` always holds for the
+        # complete layer (it covers the whole logical height).
+        layers.append((page_img, scale, page_h + 1))
+    return layers or None
 
 
 def capture_report(out_dir: str, pbip_path: str, model_name: str,
@@ -1064,17 +1178,29 @@ def capture_report(out_dir: str, pbip_path: str, model_name: str,
                 # visual still crops at its original logical rectangle.
                 path = os.path.join(d, f"page_{_norm(page)}_powerbi.png")
                 eff_w = page_w
-                res = _full_page_capture(
+                layers = _full_page_layers(
                     img, page_json, page_w, page_h, pbip_path, model_name,
                     launch_timeout, render_settle, CROP, hwnd) if CROP else None
 
-                scale = None
-                if res is not None:
-                    page_img, scale, eff_w = res
-                    page_img.save(path)
-                if scale is None:
+                if layers:
+                    # Save every layer; the primary (highest-res) keeps the
+                    # canonical page filename so existing consumers still work.
+                    primary_img, primary_scale, _ = layers[0]
+                    primary_img.save(path)
+                    layer_meta = [{"image": os.path.basename(path),
+                                   "scale": primary_scale,
+                                   "maxY": layers[0][2]}]
+                    for i, (limg, lscale, lmaxy) in enumerate(layers[1:], 1):
+                        lpath = os.path.join(
+                            d, f"page_{_norm(page)}_powerbi_L{i}.png")
+                        limg.save(lpath)
+                        layer_meta.append({"image": os.path.basename(lpath),
+                                           "scale": lscale, "maxY": lmaxy})
+                    _write_page_meta(d, page, primary_scale, eff_w, page_h,
+                                     layers=layer_meta)
+                else:
                     img.save(path)        # fallback: whole window
-                _write_page_meta(d, page, scale, eff_w, page_h)
+                    _write_page_meta(d, page, None, eff_w, page_h)
                 out[page] = path
             finally:
                 _restore_text(page_json, orig_page_text)
@@ -1088,15 +1214,243 @@ def capture_report(out_dir: str, pbip_path: str, model_name: str,
 
 
 def _write_page_meta(screens_dir: str, page: str, scale: Optional[float],
-                     page_w: float, page_h: float) -> None:
-    """Persist the logical→pixel ``scale`` for a captured page (for crop.py)."""
+                     page_w: float, page_h: float,
+                     layers: Optional[List[Dict]] = None) -> None:
+    """Persist the logical→pixel ``scale`` for a captured page (for crop.py).
+
+    ``layers`` (optional) lists every resolution layer captured for the page —
+    ``[{"image", "scale", "maxY"}, ...]`` highest-resolution first — so the
+    per-visual cropper can pick the sharpest layer that still contains each
+    visual. ``scale`` mirrors the primary layer for backward compatibility.
+    """
     meta = os.path.join(screens_dir, f"page_{_norm(page)}_powerbi.json")
+    payload = {"scale": scale, "pageWidth": page_w,
+               "pageHeight": page_h, "cropped": scale is not None}
+    if layers:
+        payload["layers"] = layers
     try:
         with open(meta, "w", encoding="utf-8") as fh:
-            json.dump({"scale": scale, "pageWidth": page_w,
-                       "pageHeight": page_h, "cropped": scale is not None}, fh)
+            json.dump(payload, fh)
     except OSError:
         pass
+
+
+# --------------------------------------------------------------------------- #
+# isolated per-visual capture
+# --------------------------------------------------------------------------- #
+def _dbg() -> bool:
+    return bool(os.environ.get("PBI_DEBUG"))
+
+
+def _rmtree(path: str) -> None:
+    import shutil
+    try:
+        shutil.rmtree(path)
+    except OSError:
+        pass
+
+
+def _write_temp_page_json(path: str, name: str, page_w: float, page_h: float,
+                          src_page_json: Optional[str], CROP) -> None:
+    """Write a temp single-visual page.json (sentinel outspace painted)."""
+    objects = {}
+    if src_page_json and os.path.isfile(src_page_json):
+        try:
+            with open(src_page_json, encoding="utf-8") as fh:
+                objects = json.load(fh).get("objects", {}) or {}
+        except (OSError, json.JSONDecodeError):
+            objects = {}
+    data = {
+        "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/"
+                   "report/definition/page/2.0.0/schema.json",
+        "name": name,
+        "displayName": name,
+        "displayOption": "FitToPage",
+        "height": int(round(page_h)),
+        "width": int(round(page_w)),
+        "objects": objects,
+    }
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2)
+    except OSError:
+        return
+    _set_page_outspace(path, CROP.SENTINEL_HEX)   # paint sentinel for cropping
+
+
+def _copy_visual_to(src_vf: str, dst_vf: str, vw: float, vh: float) -> bool:
+    """Copy a visual folder and reposition the visual to fill (0,0,vw,vh)."""
+    import shutil
+    try:
+        shutil.copytree(src_vf, dst_vf)
+    except OSError:
+        return False
+    vj = os.path.join(dst_vf, "visual.json")
+    try:
+        with open(vj, encoding="utf-8") as fh:
+            data = json.load(fh)
+        pos = data.get("position", {}) or {}
+        pos["x"], pos["y"] = 0, 0
+        pos["width"], pos["height"] = int(round(vw)), int(round(vh))
+        pos.setdefault("z", 0)
+        data["position"] = pos
+        with open(vj, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2)
+    except (OSError, json.JSONDecodeError):
+        return False
+    return True
+
+
+def capture_visuals_isolated(out_dir: str, pbip_path: str, model_name: str,
+                             targets: List[Dict], *, launch_timeout: int = 150,
+                             render_settle: int = 25) -> set:
+    """Capture each requested visual COMPLETE + sharp, alone on a temp page.
+
+    A tall report page is clipped at the fold on a small monitor, so visuals
+    below the fold cannot be captured from the whole-page render. This renders
+    each visual ALONE on a temporary page: the visual is placed at logical
+    ``(0, 0)`` and the page is padded on the right to a WIDE aspect ratio so
+    Power BI's Fit-to-Width shows the visual's full height within the viewport.
+    The single-visual page is captured complete, the visual is cropped out, and
+    saved as ``<key>_powerbi.png`` (never overwriting a user-supplied file).
+
+    ``targets`` is a list of ``{"key", "name", "position": {x,y,width,height}}``
+    where ``name`` is the visual's PBIR folder name. The temp page and the
+    original ``pages.json`` are always removed/restored before returning, so the
+    emitted report is never altered. Returns the set of keys captured.
+    """
+    done: set = set()
+    if os.name != "nt" or not targets or not os.path.isfile(pbip_path):
+        return done
+    try:
+        import crop as CROP  # noqa: E402
+    except ImportError:
+        return done
+
+    pages_base = os.path.join(out_dir, f"{model_name}.Report", "definition",
+                              "pages")
+    pages_json = os.path.join(pages_base, "pages.json")
+    if not os.path.isfile(pages_json) or not os.path.isdir(pages_base):
+        return done
+    try:
+        with open(pages_json, encoding="utf-8") as fh:
+            pages_raw = fh.read()
+        pages_data = json.loads(pages_raw)
+    except (OSError, json.JSONDecodeError):
+        return done
+
+    screens = SS.ensure_dir(out_dir)
+    TEMP = "__isocap"
+    temp_dir = os.path.join(pages_base, TEMP)
+
+    def _find_visual_folder(name: str) -> Optional[str]:
+        for pd in os.listdir(pages_base):
+            if pd == TEMP:
+                continue
+            vf = os.path.join(pages_base, pd, "visuals", name)
+            if os.path.isfile(os.path.join(vf, "visual.json")):
+                return vf
+        return None
+
+    src_page_json = None
+    for pd in os.listdir(pages_base):
+        pj = os.path.join(pages_base, pd, "page.json")
+        if os.path.isfile(pj):
+            src_page_json = pj
+            break
+
+    print(f"  capturing {len(targets)} below-fold visual(s) in isolation for a "
+          "complete, uncropped render (one relaunch each)…")
+    try:
+        for t in targets:
+            key = t.get("key")
+            name = t.get("name")
+            pos = t.get("position") or {}
+            vw = float(pos.get("width") or 0)
+            vh = float(pos.get("height") or 0)
+            if not key or not name or vw <= 0 or vh <= 0:
+                continue
+            dst = os.path.join(screens, f"{key}_powerbi.png")
+            if os.path.isfile(dst):
+                done.add(key)
+                continue                       # never overwrite a supplied file
+            src_vf = _find_visual_folder(name)
+            if not src_vf:
+                print(f"    · {key}: source visual '{name}' not found — skipped")
+                continue
+
+            captured = False
+            reason = "?"
+            aspect = 3.1                       # > viewport aspect ⇒ height fits
+            for _attempt in range(4):
+                _rmtree(temp_dir)
+                os.makedirs(os.path.join(temp_dir, "visuals"), exist_ok=True)
+                page_w = max(vw, vh * aspect)
+                page_h = vh
+                _write_temp_page_json(os.path.join(temp_dir, "page.json"),
+                                      TEMP, page_w, page_h, src_page_json, CROP)
+                if not _copy_visual_to(src_vf,
+                                       os.path.join(temp_dir, "visuals", name),
+                                       vw, vh):
+                    reason = "could not stage visual folder"
+                    break
+                pd2 = dict(pages_data)
+                pd2["pageOrder"] = [TEMP]
+                pd2["activePageName"] = TEMP
+                try:
+                    with open(pages_json, "w", encoding="utf-8") as fh:
+                        json.dump(pd2, fh, indent=2)
+                except OSError:
+                    reason = "could not rewrite pages.json"
+                    break
+
+                hwnd = _launch_and_wait(pbip_path, model_name, launch_timeout,
+                                        force_fresh=True)
+                if not hwnd:
+                    reason = "Power BI window did not open"
+                    break
+                img = _render_and_capture(hwnd, render_settle)
+                if img is None:
+                    reason = "PrintWindow returned nothing"
+                    aspect *= 1.3
+                    continue
+                if _dbg():
+                    try:
+                        img.save(os.path.join(screens,
+                                 f"__iso_{key}_a{_attempt}_raw.png"))
+                    except OSError:
+                        pass
+                r = CROP.clean_page_full(img, page_h, page_w)
+                if not r:
+                    reason = "page sentinel not found in capture"
+                    aspect *= 1.3
+                    continue
+                page_img, scale, complete = r
+                if not complete:
+                    reason = (f"still clipped at aspect {aspect:.1f} "
+                              f"(scale {scale:.3f})")
+                    aspect *= 1.3              # still clipped — widen the padding
+                    continue
+                crop_img = CROP.crop_visual(
+                    page_img, scale,
+                    {"x": 0, "y": 0, "width": vw, "height": vh})
+                if crop_img is None:
+                    reason = "crop_visual returned None"
+                    aspect *= 1.3
+                    continue
+                crop_img.save(dst)
+                done.add(key)
+                captured = True
+                print(f"    · {key}: captured {crop_img.size[0]}x"
+                      f"{crop_img.size[1]} (complete)")
+                break
+            if not captured:
+                print(f"    · {key}: isolated capture failed — {reason}")
+    finally:
+        _rmtree(temp_dir)
+        _restore_text(pages_json, pages_raw)
+        _close_all_report_windows(model_name)
+    return done
 
 
 def _close_all_report_windows(model_name: str, timeout: int = 30) -> None:
@@ -1112,11 +1466,20 @@ def _close_all_report_windows(model_name: str, timeout: int = 30) -> None:
 
 
 def _launch_and_wait(pbip_path: str, model_name: str,
-                     launch_timeout: int) -> Optional[int]:
-    """Launch the .pbip (if not already open) and return its report window."""
-    hwnd = _find_pbi_window(model_name)
-    if hwnd is not None:
-        return hwnd
+                     launch_timeout: int, force_fresh: bool = False) -> Optional[int]:
+    """Launch the .pbip (if not already open) and return its report window.
+
+    When ``force_fresh`` is True any already-open window is closed first and the
+    function waits for a genuinely NEW window to appear, so a relaunch that must
+    pick up an on-disk change (e.g. a widened page width) never reattaches to the
+    stale already-rendered window.
+    """
+    if force_fresh:
+        _close_all_report_windows(model_name)
+    else:
+        hwnd = _find_pbi_window(model_name)
+        if hwnd is not None:
+            return hwnd
     pre = set(_pbi_report_windows())
     try:
         os.startfile(pbip_path)  # noqa: S606 (intended app launch)
@@ -1124,14 +1487,17 @@ def _launch_and_wait(pbip_path: str, model_name: str,
         return None
     deadline = time.time() + launch_timeout
     while time.time() < deadline:
-        hwnd = _find_pbi_window(model_name)   # prefer the titled report window
-        if hwnd:
-            return hwnd
         new = [w for w in _pbi_report_windows() if w not in pre]
         if new:
             return new[0]
+        if not force_fresh:
+            hwnd = _find_pbi_window(model_name)   # prefer the titled report window
+            if hwnd:
+                return hwnd
         time.sleep(2)
-    return None
+    # Fresh launch never produced a NEW window — fall back to any report window
+    # so the caller still gets something rather than nothing.
+    return _find_pbi_window(model_name)
 
 
 def _read_active_page(pages_json: str) -> Optional[str]:
