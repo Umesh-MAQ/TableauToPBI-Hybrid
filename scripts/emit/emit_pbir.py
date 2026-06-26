@@ -582,6 +582,12 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
 
     def _with_units(b: Dict) -> Dict:
         if b.get("isMeasure"):
+            # A measure must reference the table that DEFINES it, not the chart's
+            # primary (fact) entity — otherwise a measure owned by another CSV
+            # (e.g. 'Sum of TotalCases' on AgeGroupDetails) binds to the wrong
+            # table and the visual shows no value.
+            b["entity"] = B.measure_entity(b.get("prop"), decisions,
+                                           b.get("entity") or entity)
             b["displayUnits"] = units.get(b["prop"], 1)
         return b
 
@@ -617,7 +623,7 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         agg = B.pill_agg_binding(ws, entity, cols, decisions, ir)
         if agg:
             return agg
-        return B.value_binding(valf, entity, mset, mlist, cols, ir)
+        return _with_units(B.value_binding(valf, entity, mset, mlist, cols, ir))
 
     # Caption-only worksheets (dynamic <caption>, no real shelves) -> textbox.
     caption = ws.get("caption") if ws else None
@@ -634,7 +640,8 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
             or (valf if valf in mset else None) \
             or B.measure_for_pill(ws, decisions, mset)
         if m:
-            return P.card_visual(name, pos, entity, m, title=ws_name, theme=theme,
+            ment = B.measure_entity(m, decisions, entity)
+            return P.card_visual(name, pos, ment, m, title=ws_name, theme=theme,
                                  display_units=units.get(m, 1))
         # No named model measure: if the worksheet dropped an implicit numeric
         # aggregation onto the card (e.g. AVG(int_rate)), reproduce that exact
@@ -755,7 +762,7 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         mapped = CHART_TYPE_MAP.get(vtype, vtype)
         # categoryIsMeasure: treat the category field as a Measure (for histograms)
         if vd.get("category") and vd.get("categoryIsMeasure"):
-            catbind = {"entity": entity, "prop": vd["category"], "isMeasure": True}
+            catbind = _with_units({"entity": entity, "prop": vd["category"], "isMeasure": True})
         elif vd.get("category"):
             catbind = {"entity": B.entity_for_field(vd["category"], entity, decisions, ir),
                        "prop": vd["category"]}
@@ -784,7 +791,8 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
         sort = None
         sd = vd.get("sort")
         if sd == "valueDesc":
-            sort = P.measure_sort(entity, valbind["prop"]) if valbind.get("isMeasure") else None
+            sort = P.measure_sort(valbind.get("entity") or entity, valbind["prop"]) \
+                if valbind.get("isMeasure") else None
         elif sd == "categoryAsc":
             sort = P.column_sort(catbind["entity"], catbind["prop"])
         # Secondary / additional measures (e.g. PY lines on KPI sparklines)
@@ -848,11 +856,18 @@ def build_visual(zone: Dict, ir: Dict, decisions: Dict, z: int, geom) -> Optiona
     if vtype in ("matrix", "pivotTable"):
         def _bind(spec):
             if isinstance(spec, dict):
-                ent = spec.get("entity") or B._field_entity(spec.get("prop"), decisions, ir)
-                return {"entity": ent, "prop": spec["prop"],
-                        "isMeasure": spec.get("isMeasure", spec.get("prop") in mset)}
-            ent = entity if spec in mset else B._field_entity(spec, decisions, ir)
-            return {"entity": ent, "prop": spec, "isMeasure": spec in mset}
+                is_m = spec.get("isMeasure", spec.get("prop") in mset)
+                if is_m:
+                    ent = B.measure_entity(spec.get("prop"), decisions,
+                                           spec.get("entity") or entity)
+                else:
+                    ent = spec.get("entity") or B._field_entity(spec.get("prop"), decisions, ir)
+                return {"entity": ent, "prop": spec["prop"], "isMeasure": is_m}
+            if spec in mset:
+                return {"entity": B.measure_entity(spec, decisions, entity),
+                        "prop": spec, "isMeasure": True}
+            ent = B._field_entity(spec, decisions, ir)
+            return {"entity": ent, "prop": spec, "isMeasure": False}
         # Deterministic fallback when no agent decision: rows/cols from the
         # worksheet shelf, value from the measure pill mapped to its model measure.
         mapped_m = B.measure_for_pill(ws, decisions, mset)

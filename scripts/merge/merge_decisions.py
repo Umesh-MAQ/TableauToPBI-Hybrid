@@ -463,14 +463,25 @@ def merge(ir: Dict,
         measures, synthesize_pill_measures(ir, tables, measures, fact))
 
     valid = {t.get("name") for t in tables}
+    dec_like = {"tables": tables}
     for m in measures:
         if m.get("table") not in valid:
             old = m.get("table")
-            m["table"] = fact
+            # Resolve the measure's true home from the column its DAX references
+            # (the same owner the report binder uses), so a placeholder-table
+            # measure lands on the table that actually holds the column instead of
+            # being dumped on the fact (which may not have that column at all).
+            new_home = fact
+            col_ref = re.search(r"\[([^\[\]]+)\]", m.get("dax", "") or "")
+            if col_ref:
+                owner = PB.entity_for_field(col_ref.group(1), fact, dec_like, ir)
+                if owner in valid:
+                    new_home = owner
+            m["table"] = new_home
             # Re-point the DAX column qualifier too: a deterministic measure carries
             # the single-flat placeholder table token inside its DAX, which must now
-            # resolve to the real fact table (else it references a missing table).
-            m["dax"] = _repoint_dax_table(m.get("dax", ""), old, fact)
+            # resolve to the real home table (else it references a missing table).
+            m["dax"] = _repoint_dax_table(m.get("dax", ""), old, new_home)
 
     calc_cols = list(agent_fragment.get("calculatedColumns", []))
     for c in calc_cols:

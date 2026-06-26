@@ -1,201 +1,101 @@
 DEPARTMENT_KEY,Encounter CSN,Parent Hospital,Hospital,Unit,Patient Class,Census Date,Census Count,Census Count Adults,Census Count Peds
-1011,500001,Nash,UNC Nash,PICU,Emergency,1/29/2026,1,0,1
-1002,500002,Med Center,UNC Medical Center,NICU,Inpatient,5/20/2026,1,0,1
-1004,500003,Rex,UNC Rex Hospital,ICU,Emergency,5/10/2026,1,1,0
-1009,500004,Nash,UNC Nash,Emergency,Emergency,4/18/2026,1,1,0
-1007,500005,Johnston,UNC Johnston,Medical/Surgical,Observation,3/29/2026,1,1,0
-1002,500006,Med Center,UNC Medical Center,NICU,Emergency,4/2/2026,1,0,1
-1002,500007,Med Center,UNC Medical Center,NICU,Emergency,4/7/2026,1,0,1
-1004,500008,Rex,UNC Rex Hospital,ICU,Inpatient,1/18/2026,1,1,0
-1007,500009,Johnston,UNC Johnston,Medical/Surgical,Inpatient,3/13/2026,1,1,0
-1011,500010,Nash,UNC Nash,PICU,Emergency,3/10/2026,1,0,1
-1012,500011,Chatham,UNC Chatham,Maternity,Emergency,3/4/2026,1,1,0
-1004,500012,Rex,UNC Rex Hospital,ICU,Inpatient,3/25/2026,1,1,0
-1004,500013,Rex,UNC Rex Hospital,ICU,Emergency,5/26/2026,1,1,0
-1008,500014,Johnston,UNC Johnston,Pediatrics,Observation,2/6/2026,1,0,1
-1012,500015,Chatham,UNC Chatham,Maternity,Inpatient,5/30/2026,1,1,0
-1009,500016,Nash,UNC Nash,Emergency,Inpatient,5/7/2026,1,1,0
-1013,500017,Chatham,UNC Chatham,ICU,Emergency,4/19/2026,1,1,0
-1005,500018,Rex,UNC Rex Hospital,Oncology,Emergency,5/22/2026,1,1,0
-1006,500019,Rex,UNC Rex Hospital,Cardiology,Emergency,1/29/2026,1,1,0
-1005,500020,Rex,UNC Rex Hospital,Oncology,Emergency,5/9/2026,1,1,0
-1010,500021,Nash,UNC Nash,Telemetry,Inpatient,2/20/2026,1,1,0
-1010,500022,Nash,UNC Nash,Telemetry,Inpatient,3/24/2026,1,1,0
-1001,500023,Med Center,UNC Medical Center,ICU,Emergency,3/3/2026,1,1,0
-1013,500024,Chatham,UNC Chatham,ICU,Emergency,2/2/2026,1,1,0
-1014,500025,Med Center,UNC Medical Center,Telemetry,Emergency,6/5/2026,1,1,0
-1005,500026,Rex,UNC Rex Hospital,Oncology,Inpatient,4/13/2026,1,1,0
-1004,500027,Rex,UNC Rex Hospital,ICU,Emergency,2/27/2026,1,1,0
-1004,500028,Rex,UNC Rex Hospital,ICU,Observation,1/2/2026,1,1,0
-1002,500029,Med Center,UNC Medical Center,NICU,Emergency,5/12/2026,1,0,1
-1015,500030,Rex,UNC Rex Hospital,Emergency,Inpatient,5/27/2026,1,1,0
-1002,500031,Med Center,UNC Medical Center,NICU,Emergency,1/25/2026,1,0,1
-1001,500032,Med Center,UNC Medical Center,ICU,Inpatient,1/26/2026,1,1,0
-1009,500033,Nash,UNC Nash,Emergency,Inpatient,4/25/2026,1,1,0
-1008,500034,Johnston,UNC Johnston,Pediatrics,Inpatient,5/21/2026,1,0,1
-1007,500035,Johnston,UNC Johnston,Medical/Surgical,Inpatient,5/5/2026,1,1,0
-1007,500036,Johnston,UNC Johnston,Medical/Surgical,Emergency,3/9/2026,1,1,0
-1012,500037,Chatham,UNC Chatham,Maternity,Emergency,5/5/2026,1,1,0
-1009,500038,Nash,UNC Nash,Emergency,Emergency,1/16/2026,1,1,0
-1015,500039,Rex,UNC Rex Hospital,Emergency,Inpatient,5/16/2026,1,1,0
-1010,500040,Nash,UNC Nash,Telemetry,Inpatient,1/18/2026,1,1,0
-1010,500041,Nash,UNC Nash,Telemetry,Emergency,6/2/2026,1,1,0
-1009,500042,Nash,UNC Nash,Emergency,Inpatient,3/22/2026,1,1,0
-1011,500043,Nash,UNC Nash,PICU,Emergency,3/18/2026,1,0,1
-1002,500044,Med Center,UNC Medical Center,NICU,Inpatient,1/19/2026,1,0,1
-1015,500045,Rex,UNC Rex Hospital,Emergency,Emergency,3/4/2026,1,1,0
-1005,500046,Rex,UNC Rex Hospital,Oncology,Observation,6/6/2026,1,1,0
-1015,500047,Rex,UNC Rex Hospital,Emergency,Inpatient,1/27/2026,1,1,0
-1005,500048,Rex,UNC Rex Hospital,Oncology,Observation,3/14/2026,1,1,0
-1009,500049,Nash,UNC Nash,Emergency,Observation,5/6/2026,1,1,0
-1001,500050,Med Center,UNC Medical Center,ICU,Emergency,1/1/2026,1,1,0
-1008,500051,Johnston,UNC Johnston,Pediatrics,Emergency,5/22/2026,1,0,1
-1015,500052,Rex,UNC Rex Hospital,Emergency,Observation,2/8/2026,1,1,0
-1003,500053,Med Center,UNC Medical Center,Emergency,Inpatient,1/11/2026,1,1,0
-1011,500054,Nash,UNC Nash,PICU,Inpatient,1/27/2026,1,0,1
-1015,500055,Rex,UNC Rex Hospital,Emergency,Emergency,3/2/2026,1,1,0
-1015,500056,Rex,UNC Rex Hospital,Emergency,Inpatient,3/27/2026,1,1,0
-1007,500057,Johnston,UNC Johnston,Medical/Surgical,Inpatient,1/10/2026,1,1,0
-1004,500058,Rex,UNC Rex Hospital,ICU,Observation,1/7/2026,1,1,0
-1006,500059,Rex,UNC Rex Hospital,Cardiology,Observation,5/11/2026,1,1,0
-1003,500060,Med Center,UNC Medical Center,Emergency,Emergency,5/29/2026,1,1,0
-1013,500061,Chatham,UNC Chatham,ICU,Inpatient,3/22/2026,1,1,0
-1005,500062,Rex,UNC Rex Hospital,Oncology,Emergency,1/12/2026,1,0,1
-1012,500063,Chatham,UNC Chatham,Maternity,Observation,2/20/2026,1,0,1
-1011,500064,Nash,UNC Nash,PICU,Observation,2/1/2026,1,0,1
-1006,500065,Rex,UNC Rex Hospital,Cardiology,Emergency,4/14/2026,1,1,0
-1007,500066,Johnston,UNC Johnston,Medical/Surgical,Observation,2/14/2026,1,1,0
-1005,500067,Rex,UNC Rex Hospital,Oncology,Observation,2/23/2026,1,1,0
-1008,500068,Johnston,UNC Johnston,Pediatrics,Inpatient,4/24/2026,1,0,1
-1011,500069,Nash,UNC Nash,PICU,Emergency,1/22/2026,1,0,1
-1005,500070,Rex,UNC Rex Hospital,Oncology,Emergency,2/27/2026,1,1,0
-1014,500071,Med Center,UNC Medical Center,Telemetry,Observation,1/19/2026,1,1,0
-1008,500072,Johnston,UNC Johnston,Pediatrics,Inpatient,4/13/2026,1,0,1
-1003,500073,Med Center,UNC Medical Center,Emergency,Observation,5/13/2026,1,1,0
-1003,500074,Med Center,UNC Medical Center,Emergency,Emergency,4/29/2026,1,1,0
-1014,500075,Med Center,UNC Medical Center,Telemetry,Observation,5/10/2026,1,1,0
-1008,500076,Johnston,UNC Johnston,Pediatrics,Inpatient,3/8/2026,1,0,1
-1005,500077,Rex,UNC Rex Hospital,Oncology,Observation,4/23/2026,1,1,0
-1015,500078,Rex,UNC Rex Hospital,Emergency,Inpatient,5/19/2026,1,1,0
-1012,500079,Chatham,UNC Chatham,Maternity,Observation,2/24/2026,1,1,0
-1001,500080,Med Center,UNC Medical Center,ICU,Observation,2/22/2026,1,1,0
-1008,500081,Johnston,UNC Johnston,Pediatrics,Emergency,1/2/2026,1,0,1
-1009,500082,Nash,UNC Nash,Emergency,Inpatient,6/4/2026,1,1,0
-1007,500083,Johnston,UNC Johnston,Medical/Surgical,Inpatient,3/28/2026,1,1,0
-1010,500084,Nash,UNC Nash,Telemetry,Inpatient,5/17/2026,1,1,0
-1002,500085,Med Center,UNC Medical Center,NICU,Observation,4/20/2026,1,0,1
-1006,500086,Rex,UNC Rex Hospital,Cardiology,Observation,2/24/2026,1,1,0
-1014,500087,Med Center,UNC Medical Center,Telemetry,Emergency,1/21/2026,1,1,0
-1002,500088,Med Center,UNC Medical Center,NICU,Inpatient,1/11/2026,1,0,1
-1003,500089,Med Center,UNC Medical Center,Emergency,Observation,5/2/2026,1,1,0
-1013,500090,Chatham,UNC Chatham,ICU,Emergency,4/5/2026,1,1,0
-1001,500091,Med Center,UNC Medical Center,ICU,Inpatient,3/21/2026,1,1,0
-1010,500092,Nash,UNC Nash,Telemetry,Emergency,3/4/2026,1,1,0
-1013,500093,Chatham,UNC Chatham,ICU,Emergency,1/11/2026,1,1,0
-1011,500094,Nash,UNC Nash,PICU,Observation,3/29/2026,1,0,1
-1011,500095,Nash,UNC Nash,PICU,Emergency,4/28/2026,1,0,1
-1005,500096,Rex,UNC Rex Hospital,Oncology,Emergency,6/7/2026,1,1,0
-1005,500097,Rex,UNC Rex Hospital,Oncology,Observation,3/24/2026,1,1,0
-1010,500098,Nash,UNC Nash,Telemetry,Inpatient,6/6/2026,1,1,0
-1008,500099,Johnston,UNC Johnston,Pediatrics,Emergency,2/24/2026,1,0,1
-1015,500100,Rex,UNC Rex Hospital,Emergency,Emergency,3/12/2026,1,1,0
-1007,500101,Johnston,UNC Johnston,Medical/Surgical,Emergency,5/6/2026,1,1,0
-1008,500102,Johnston,UNC Johnston,Pediatrics,Inpatient,4/25/2026,1,0,1
-1005,500103,Rex,UNC Rex Hospital,Oncology,Emergency,5/29/2026,1,1,0
-1009,500104,Nash,UNC Nash,Emergency,Inpatient,3/26/2026,1,1,0
-1002,500105,Med Center,UNC Medical Center,NICU,Inpatient,2/19/2026,1,0,1
-1012,500106,Chatham,UNC Chatham,Maternity,Inpatient,5/4/2026,1,1,0
-1014,500107,Med Center,UNC Medical Center,Telemetry,Emergency,2/19/2026,1,1,0
-1009,500108,Nash,UNC Nash,Emergency,Inpatient,2/2/2026,1,1,0
-1011,500109,Nash,UNC Nash,PICU,Observation,5/6/2026,1,0,1
-1008,500110,Johnston,UNC Johnston,Pediatrics,Observation,3/29/2026,1,0,1
-1008,500111,Johnston,UNC Johnston,Pediatrics,Observation,1/19/2026,1,0,1
-1002,500112,Med Center,UNC Medical Center,NICU,Inpatient,3/5/2026,1,0,1
-1013,500113,Chatham,UNC Chatham,ICU,Observation,5/14/2026,1,1,0
-1005,500114,Rex,UNC Rex Hospital,Oncology,Observation,5/26/2026,1,1,0
-1011,500115,Nash,UNC Nash,PICU,Inpatient,1/21/2026,1,0,1
-1007,500116,Johnston,UNC Johnston,Medical/Surgical,Observation,4/26/2026,1,1,0
-1012,500117,Chatham,UNC Chatham,Maternity,Observation,3/14/2026,1,1,0
-1013,500118,Chatham,UNC Chatham,ICU,Inpatient,5/31/2026,1,1,0
-1011,500119,Nash,UNC Nash,PICU,Observation,2/8/2026,1,0,1
-1010,500120,Nash,UNC Nash,Telemetry,Emergency,5/26/2026,1,1,0
-1007,500121,Johnston,UNC Johnston,Medical/Surgical,Inpatient,3/11/2026,1,1,0
-1015,500122,Rex,UNC Rex Hospital,Emergency,Emergency,4/21/2026,1,1,0
-1014,500123,Med Center,UNC Medical Center,Telemetry,Observation,5/28/2026,1,1,0
-1009,500124,Nash,UNC Nash,Emergency,Inpatient,4/24/2026,1,1,0
-1008,500125,Johnston,UNC Johnston,Pediatrics,Observation,3/31/2026,1,0,1
-1007,500126,Johnston,UNC Johnston,Medical/Surgical,Inpatient,5/7/2026,1,1,0
-1006,500127,Rex,UNC Rex Hospital,Cardiology,Emergency,3/6/2026,1,1,0
-1014,500128,Med Center,UNC Medical Center,Telemetry,Emergency,5/19/2026,1,1,0
-1013,500129,Chatham,UNC Chatham,ICU,Inpatient,5/8/2026,1,1,0
-1015,500130,Rex,UNC Rex Hospital,Emergency,Emergency,3/15/2026,1,1,0
-1013,500131,Chatham,UNC Chatham,ICU,Observation,3/3/2026,1,1,0
-1002,500132,Med Center,UNC Medical Center,NICU,Observation,2/27/2026,1,0,1
-1015,500133,Rex,UNC Rex Hospital,Emergency,Observation,3/16/2026,1,1,0
-1004,500134,Rex,UNC Rex Hospital,ICU,Emergency,4/27/2026,1,1,0
-1015,500135,Rex,UNC Rex Hospital,Emergency,Observation,2/4/2026,1,1,0
-1014,500136,Med Center,UNC Medical Center,Telemetry,Observation,1/1/2026,1,1,0
-1014,500137,Med Center,UNC Medical Center,Telemetry,Emergency,2/8/2026,1,1,0
-1007,500138,Johnston,UNC Johnston,Medical/Surgical,Observation,4/27/2026,1,1,0
-1004,500139,Rex,UNC Rex Hospital,ICU,Observation,4/16/2026,1,1,0
-1011,500140,Nash,UNC Nash,PICU,Inpatient,2/8/2026,1,0,1
-1014,500141,Med Center,UNC Medical Center,Telemetry,Observation,4/23/2026,1,1,0
-1014,500142,Med Center,UNC Medical Center,Telemetry,Observation,2/9/2026,1,1,0
-1011,500143,Nash,UNC Nash,PICU,Emergency,1/21/2026,1,0,1
-1015,500144,Rex,UNC Rex Hospital,Emergency,Observation,5/5/2026,1,1,0
-1004,500145,Rex,UNC Rex Hospital,ICU,Observation,1/24/2026,1,1,0
-1015,500146,Rex,UNC Rex Hospital,Emergency,Observation,1/8/2026,1,1,0
-1003,500147,Med Center,UNC Medical Center,Emergency,Inpatient,3/4/2026,1,1,0
-1003,500148,Med Center,UNC Medical Center,Emergency,Observation,1/21/2026,1,1,0
-1015,500149,Rex,UNC Rex Hospital,Emergency,Observation,5/30/2026,1,1,0
-1011,500150,Nash,UNC Nash,PICU,Inpatient,1/3/2026,1,0,1
-1008,500151,Johnston,UNC Johnston,Pediatrics,Observation,3/30/2026,1,0,1
-1004,500152,Rex,UNC Rex Hospital,ICU,Emergency,4/9/2026,1,1,0
-1005,500153,Rex,UNC Rex Hospital,Oncology,Emergency,3/17/2026,1,1,0
-1013,500154,Chatham,UNC Chatham,ICU,Emergency,1/13/2026,1,1,0
-1013,500155,Chatham,UNC Chatham,ICU,Emergency,4/1/2026,1,1,0
-1013,500156,Chatham,UNC Chatham,ICU,Inpatient,2/5/2026,1,1,0
-1010,500157,Nash,UNC Nash,Telemetry,Observation,4/4/2026,1,1,0
-1003,500158,Med Center,UNC Medical Center,Emergency,Observation,2/21/2026,1,1,0
-1014,500159,Med Center,UNC Medical Center,Telemetry,Inpatient,2/12/2026,1,1,0
-1008,500160,Johnston,UNC Johnston,Pediatrics,Observation,1/20/2026,1,0,1
-1014,500161,Med Center,UNC Medical Center,Telemetry,Inpatient,5/23/2026,1,1,0
-1008,500162,Johnston,UNC Johnston,Pediatrics,Observation,4/5/2026,1,0,1
-1002,500163,Med Center,UNC Medical Center,NICU,Emergency,3/1/2026,1,0,1
-1002,500164,Med Center,UNC Medical Center,NICU,Inpatient,4/29/2026,1,0,1
-1005,500165,Rex,UNC Rex Hospital,Oncology,Observation,5/7/2026,1,1,0
-1006,500166,Rex,UNC Rex Hospital,Cardiology,Observation,5/19/2026,1,1,0
-1010,500167,Nash,UNC Nash,Telemetry,Inpatient,4/15/2026,1,1,0
-1014,500168,Med Center,UNC Medical Center,Telemetry,Inpatient,4/3/2026,1,1,0
-1007,500169,Johnston,UNC Johnston,Medical/Surgical,Emergency,3/12/2026,1,1,0
-1011,500170,Nash,UNC Nash,PICU,Inpatient,6/2/2026,1,0,1
-1002,500171,Med Center,UNC Medical Center,NICU,Emergency,5/22/2026,1,0,1
-1001,500172,Med Center,UNC Medical Center,ICU,Inpatient,3/12/2026,1,1,0
-1011,500173,Nash,UNC Nash,PICU,Inpatient,1/7/2026,1,0,1
-1003,500174,Med Center,UNC Medical Center,Emergency,Inpatient,3/9/2026,1,1,0
-1008,500175,Johnston,UNC Johnston,Pediatrics,Emergency,4/25/2026,1,0,1
-1001,500176,Med Center,UNC Medical Center,ICU,Observation,5/14/2026,1,1,0
-1011,500177,Nash,UNC Nash,PICU,Emergency,1/28/2026,1,0,1
-1003,500178,Med Center,UNC Medical Center,Emergency,Observation,1/17/2026,1,1,0
-1010,500179,Nash,UNC Nash,Telemetry,Emergency,5/16/2026,1,1,0
-1002,500180,Med Center,UNC Medical Center,NICU,Observation,5/22/2026,1,0,1
-1006,500181,Rex,UNC Rex Hospital,Cardiology,Emergency,4/27/2026,1,1,0
-1005,500182,Rex,UNC Rex Hospital,Oncology,Inpatient,4/6/2026,1,1,0
-1007,500183,Johnston,UNC Johnston,Medical/Surgical,Emergency,1/25/2026,1,1,0
-1009,500184,Nash,UNC Nash,Emergency,Observation,5/24/2026,1,1,0
-1014,500185,Med Center,UNC Medical Center,Telemetry,Emergency,1/14/2026,1,1,0
-1004,500186,Rex,UNC Rex Hospital,ICU,Observation,2/9/2026,1,1,0
-1002,500187,Med Center,UNC Medical Center,NICU,Emergency,3/13/2026,1,0,1
-1011,500188,Nash,UNC Nash,PICU,Emergency,5/23/2026,1,0,1
-1013,500189,Chatham,UNC Chatham,ICU,Emergency,3/21/2026,1,0,1
-1011,500190,Nash,UNC Nash,PICU,Inpatient,4/13/2026,1,0,1
-1007,500191,Johnston,UNC Johnston,Medical/Surgical,Observation,4/18/2026,1,1,0
-1013,500192,Chatham,UNC Chatham,ICU,Inpatient,5/26/2026,1,1,0
-1011,500193,Nash,UNC Nash,PICU,Observation,1/21/2026,1,0,1
-1005,500194,Rex,UNC Rex Hospital,Oncology,Emergency,2/25/2026,1,1,0
-1011,500195,Nash,UNC Nash,PICU,Emergency,6/1/2026,1,0,1
-1001,500196,Med Center,UNC Medical Center,ICU,Observation,1/2/2026,1,1,0
-1006,500197,Rex,UNC Rex Hospital,Cardiology,Emergency,1/31/2026,1,1,0
-1012,500198,Chatham,UNC Chatham,Maternity,Inpatient,2/28/2026,1,1,0
-1007,500199,Johnston,UNC Johnston,Medical/Surgical,Emergency,1/11/2026,1,1,0
-1007,500200,Johnston,UNC Johnston,Medical/Surgical,Inpatient,5/27/2026,1,1,0
+1,983,Parent Hospital_1,Hospital_1,Unit_1,Gamma,2023-07-08,466,701,714
+2,763,Parent Hospital_2,Hospital_2,Unit_2,Beta,2022-06-06,823,73,128
+3,686,,,,,,954,699,60
+4,608,Parent Hospital_4,Hospital_4,Unit_4,Beta,2020-11-25,556,395,329
+5,313,Parent Hospital_5,Hospital_5,Unit_5,Alpha,2020-10-22,974,704,755
+6,903,Parent Hospital_6,Hospital_6,Unit_6,Gamma,2020-10-09,405,168,627
+7,158,Parent Hospital_7,Hospital_7,Unit_7,Alpha,2019-04-17,619,404,794
+8,843,Parent Hospital_8,Hospital_8,Unit_8,Alpha,2022-08-26,486,148,698
+9,733,Parent Hospital_9,Hospital_9,Unit_9,Delta,2024-06-03,874,904,922
+10,431,Parent Hospital_10,Hospital_10,Unit_10,Delta,2020-06-02,814,36,926
+11,446,Parent Hospital_11,Hospital_11,Unit_11,Delta,2018-09-06,225,634,881
+12,601,Parent Hospital_12,Hospital_12,Unit_12,Gamma,2022-12-26,321,143,340
+13,529,Parent Hospital_13,Hospital_13,Unit_13,Epsilon,2021-02-06,927,338,624
+14,31,Parent Hospital_14,Hospital_14,Unit_14,Epsilon,2022-01-10,582,38,148
+15,253,Parent Hospital_15,Hospital_15,Unit_15,Epsilon,2024-07-01,399,383,226
+16,76,Parent Hospital_16,Hospital_16,Unit_16,Gamma,2024-06-13,953,643,770
+17,297,Parent Hospital_17,Hospital_17,Unit_17,Beta,2021-03-19,364,153,383
+18,265,Parent Hospital_18,Hospital_18,Unit_18,Alpha,2020-11-05,928,236,511
+19,768,Parent Hospital_19,Hospital_19,Unit_19,Gamma,2021-05-06,715,182,304
+20,550,Parent Hospital_20,Hospital_20,Unit_20,Alpha,2024-07-17,906,834,2
+21,371,Parent Hospital_21,Hospital_21,Unit_21,Alpha,2020-06-14,153,381,501
+22,833,Parent Hospital_22,Hospital_22,Unit_22,Beta,2024-07-28,760,130,780
+23,30,Parent Hospital_23,Hospital_23,Unit_23,Gamma,2018-03-22,378,378,962
+24,92,Parent Hospital_24,Hospital_24,Unit_24,Epsilon,2022-01-14,725,815,988
+25,503,Parent Hospital_25,Hospital_25,Unit_25,Alpha,2019-07-20,731,949,81
+26,570,Parent Hospital_26,Hospital_26,Unit_26,Alpha,2018-08-24,132,631,93
+27,917,Parent Hospital_27,Hospital_27,Unit_27,Gamma,2021-05-23,468,396,270
+28,217,Parent Hospital_28,Hospital_28,Unit_28,Epsilon,2019-09-20,917,327,249
+29,302,Parent Hospital_29,Hospital_29,Unit_29,Gamma,2019-10-23,400,85,768
+30,720,Parent Hospital_30,Hospital_30,Unit_30,Alpha,2023-05-21,976,728,270
+31,537,Parent Hospital_31,Hospital_31,Unit_31,Beta,2018-12-17,116,362,892
+32,315,Parent Hospital_32,Hospital_32,Unit_32,Delta,2022-11-22,978,274,150
+33,118,Parent Hospital_33,Hospital_33,Unit_33,Beta,2018-11-01,611,985,299
+34,144,Parent Hospital_34,Hospital_34,Unit_34,Alpha,2023-07-31,312,776,799
+35,745,Parent Hospital_35,Hospital_35,Unit_35,Gamma,2022-11-23,205,526,80
+36,53,Parent Hospital_36,Hospital_36,Unit_36,Epsilon,2021-01-27,679,498,670
+37,97,Parent Hospital_37,Hospital_37,Unit_37,Delta,2019-12-19,230,88,556
+38,591,Parent Hospital_38,Hospital_38,Unit_38,Alpha,2019-06-28,96,114,909
+39,770,Parent Hospital_39,Hospital_39,Unit_39,Epsilon,2024-11-16,556,256,749
+40,836,Parent Hospital_40,Hospital_40,Unit_40,Delta,2024-07-29,752,238,384
+41,703,Parent Hospital_41,Hospital_41,Unit_41,Beta,2024-03-06,643,214,307
+42,747,Parent Hospital_42,Hospital_42,Unit_42,Gamma,2020-10-05,192,859,329
+43,130,Parent Hospital_43,Hospital_43,Unit_43,Delta,2024-11-09,879,379,836
+44,263,Parent Hospital_44,Hospital_44,Unit_44,Delta,2019-07-07,18,511,718
+45,256,Parent Hospital_45,Hospital_45,Unit_45,Beta,2019-04-03,607,185,611
+46,779,Parent Hospital_46,Hospital_46,Unit_46,Beta,2024-06-04,313,870,820
+47,446,Parent Hospital_47,Hospital_47,Unit_47,Delta,2024-01-11,539,703,322
+48,62,Parent Hospital_48,Hospital_48,Unit_48,Alpha,2019-12-15,607,148,585
+49,131,Parent Hospital_49,Hospital_49,Unit_49,Epsilon,2023-04-07,648,208,545
+50,833,Parent Hospital_50,Hospital_50,Unit_50,Delta,2021-10-26,226,208,791
+51,297,Parent Hospital_51,Hospital_51,Unit_51,Gamma,2022-10-11,950,90,942
+52,699,Parent Hospital_52,Hospital_52,Unit_52,Beta,2018-05-29,403,857,813
+53,892,Parent Hospital_53,Hospital_53,Unit_53,Beta,2018-07-21,257,728,548
+54,180,Parent Hospital_54,Hospital_54,Unit_54,Delta,2019-08-10,682,597,652
+55,626,Parent Hospital_55,Hospital_55,Unit_55,Gamma,2022-05-19,97,389,383
+56,543,Parent Hospital_56,Hospital_56,Unit_56,Alpha,2018-08-20,90,458,689
+57,409,Parent Hospital_57,Hospital_57,Unit_57,Alpha,2021-03-04,690,589,851
+58,153,Parent Hospital_58,Hospital_58,Unit_58,Gamma,2019-08-14,52,355,774
+59,711,Parent Hospital_59,Hospital_59,Unit_59,Delta,2019-11-03,133,476,158
+60,101,Parent Hospital_60,Hospital_60,Unit_60,Beta,2023-06-24,44,899,112
+61,928,Parent Hospital_61,Hospital_61,Unit_61,Gamma,2018-02-22,901,386,15
+62,912,Parent Hospital_62,Hospital_62,Unit_62,Delta,2018-04-11,111,517,562
+63,194,Parent Hospital_63,Hospital_63,Unit_63,Gamma,2022-05-14,394,225,419
+64,21,Parent Hospital_64,Hospital_64,Unit_64,Gamma,2024-11-11,8,57,101
+65,864,Parent Hospital_65,Hospital_65,Unit_65,Alpha,2019-01-04,769,674,867
+66,754,Parent Hospital_66,Hospital_66,Unit_66,Epsilon,2024-08-26,194,48,304
+67,355,Parent Hospital_67,Hospital_67,Unit_67,Delta,2019-11-11,646,579,516
+68,525,Parent Hospital_68,Hospital_68,Unit_68,Delta,2022-10-27,504,879,46
+69,355,Parent Hospital_69,Hospital_69,Unit_69,Delta,2020-07-07,375,206,885
+70,370,Parent Hospital_70,Hospital_70,Unit_70,Beta,2018-01-03,914,494,339
+71,990,Parent Hospital_71,Hospital_71,Unit_71,Alpha,2023-09-19,284,505,672
+72,611,Parent Hospital_72,Hospital_72,Unit_72,Delta,2020-08-31,778,524,649
+73,454,Parent Hospital_73,Hospital_73,Unit_73,Alpha,2018-06-04,499,164,62
+74,522,Parent Hospital_74,Hospital_74,Unit_74,Gamma,2021-06-19,997,824,612
+75,114,Parent Hospital_75,Hospital_75,Unit_75,Gamma,2019-05-25,804,360,121
+76,394,Parent Hospital_76,Hospital_76,Unit_76,Alpha,2024-02-11,509,410,91
+77,682,Parent Hospital_77,Hospital_77,Unit_77,Alpha,2019-06-06,627,952,844
+78,977,,,,,,204,139,535
+79,189,Parent Hospital_79,Hospital_79,Unit_79,Delta,2024-03-07,969,166,349
+80,69,Parent Hospital_80,Hospital_80,Unit_80,Epsilon,2022-09-05,174,508,759
+81,519,Parent Hospital_81,Hospital_81,Unit_81,Alpha,2021-02-10,593,183,222
+82,639,Parent Hospital_82,Hospital_82,Unit_82,Gamma,2018-11-22,488,527,156
+83,552,Parent Hospital_83,Hospital_83,Unit_83,Epsilon,2020-10-14,279,30,453
+84,925,Parent Hospital_84,Hospital_84,Unit_84,Alpha,2018-02-26,234,650,28
+85,56,Parent Hospital_85,Hospital_85,Unit_85,Gamma,2019-06-21,331,960,982
+86,865,Parent Hospital_86,Hospital_86,Unit_86,Epsilon,2023-08-26,110,745,543
+87,874,Parent Hospital_87,Hospital_87,Unit_87,Gamma,2024-09-22,225,411,296
+88,543,Parent Hospital_88,Hospital_88,Unit_88,Beta,2020-10-26,172,510,531
+89,268,Parent Hospital_89,Hospital_89,Unit_89,Beta,2018-02-13,847,906,918
+90,511,Parent Hospital_90,Hospital_90,Unit_90,Gamma,2024-10-07,543,371,313
+91,179,Parent Hospital_91,Hospital_91,Unit_91,Gamma,2019-01-03,756,171,143
+92,763,Parent Hospital_92,Hospital_92,Unit_92,Beta,2020-08-26,274,651,301
+93,375,Parent Hospital_93,Hospital_93,Unit_93,Beta,2024-05-08,658,570,751
+94,588,Parent Hospital_94,Hospital_94,Unit_94,Epsilon,2023-03-13,923,297,686
+95,409,Parent Hospital_95,Hospital_95,Unit_95,Beta,2020-01-11,335,256,752
+96,770,Parent Hospital_96,Hospital_96,Unit_96,Gamma,2022-07-12,164,754,68
+97,890,Parent Hospital_97,Hospital_97,Unit_97,Gamma,2023-08-26,729,503,193
+98,773,Parent Hospital_98,Hospital_98,Unit_98,Epsilon,2023-08-15,284,88,727
+99,768,Parent Hospital_99,Hospital_99,Unit_99,Delta,2022-07-07,586,415,516
+100,783,Parent Hospital_100,Hospital_100,Unit_100,Epsilon,2024-12-03,371,453,478

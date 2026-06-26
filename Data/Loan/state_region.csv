@@ -1,53 +1,41 @@
 state,subregion,region
-AK,Pacific,West
-CA,Pacific,West
-HI,Pacific,West
-OR,Pacific,West
-WA,Pacific,West
-AZ,Mountain,West
-CO,Mountain,West
-ID,Mountain,West
-MT,Mountain,West
-NM,Mountain,West
-NV,Mountain,West
-UT,Mountain,West
-WY,Mountain,West
-DC,South Atlantic,South
-DE,South Atlantic,South
-FL,South Atlantic,South
-GA,South Atlantic,South
-MD,South Atlantic,South
-NC,South Atlantic,South
-SC,South Atlantic,South
-VA,South Atlantic,South
-WV,South Atlantic,South
-AL,East South Central,South
-KY,East South Central,South
-MS,East South Central,South
-TN,East South Central,South
-AR,West South Central,South
-LA,West South Central,South
-OK,West South Central,South
-TX,West South Central,South
-state,subregion,region
-IL,East North Central,Midwest
-IN,East North Central,Midwest
-MI,East North Central,Midwest
-OH,East North Central,Midwest
-WI,East North Central,Midwest
-IA,West North Central,Midwest
-KS,West North Central,Midwest
-MN,West North Central,Midwest
-MO,West North Central,Midwest
-ND,West North Central,Midwest
-NE,West North Central,Midwest
-SD,West North Central,Midwest
-CT,New England,Northeast
-MA,New England,Northeast
-ME,New England,Northeast
-NH,New England,Northeast
-RI,New England,Northeast
-VT,New England,Northeast
-NJ,Middle Atlantic,Northeast
-NY,Middle Atlantic,Northeast
-PA,Middle Atlantic,Northeast
+East,West,North
+North,East,South
+Central,East,East
+Central,South,South
+Central,North,North
+West,West,Central
+Central,East,Central
+South,South,West
+Central,South,Central
+West,South,East
+East,West,Central
+Central,East,East
+North,West,West
+East,Central,South
+West,East,East
+West,South,South
+North,East,South
+West,North,East
+Central,West,East
+West,North,East
+East,West,West
+North,West,Central
+Central,Central,East
+North,East,North
+East,West,North
+Central,South,West
+Central,South,North
+East,West,Central
+East,North,South
+West,East,East
+East,Central,West
+Central,South,Central
+South,West,East
+South,East,South
+Central,East,Central
+,,
+West,West,Central
+East,Central,Central
+West,South,North
+Central,South,West

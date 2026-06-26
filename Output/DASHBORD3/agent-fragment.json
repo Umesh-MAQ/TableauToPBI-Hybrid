@@ -1,0 +1,82 @@
+{
+  "tableStrategy": "star-schema",
+  "tables": [
+    {
+      "name": "covid_19_india",
+      "role": "fact",
+      "sourceType": "csv",
+      "sourceFile": "C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Covid_Analysis/covid_19_india.csv",
+      "sourceDatasource": "covid_19_india"
+    },
+    {
+      "name": "StatewiseTestingDetails",
+      "role": "dim",
+      "sourceType": "csv",
+      "sourceFile": "C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Covid_Analysis/StatewiseTestingDetails.csv",
+      "sourceDatasource": "StatewiseTestingDetails"
+    },
+    {
+      "name": "ICMRTestingLabs",
+      "role": "dim",
+      "sourceType": "csv",
+      "sourceFile": "C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Covid_Analysis/ICMRTestingLabs.csv",
+      "sourceDatasource": "ICMRTestingLabs"
+    },
+    {
+      "name": "AgeGroupDetails",
+      "role": "dim",
+      "sourceType": "csv",
+      "sourceFile": "C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Covid_Analysis/AgeGroupDetails.csv",
+      "sourceDatasource": "AgeGroupDetails"
+    },
+    {
+      "name": "IndividualDetails",
+      "role": "dim",
+      "sourceType": "csv",
+      "sourceFile": "C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Covid_Analysis/IndividualDetails.csv",
+      "sourceDatasource": "IndividualDetails"
+    },
+    {
+      "name": "covid_vaccine_statewise",
+      "role": "dim",
+      "sourceType": "csv",
+      "sourceFile": "C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Covid_Analysis/covid_vaccine_statewise.csv",
+      "sourceDatasource": "covid_vaccine_statewise"
+    },
+    {
+      "name": "population_india_census2011",
+      "role": "dim",
+      "sourceType": "csv",
+      "sourceFile": "C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Covid_Analysis/population_india_census2011.csv",
+      "sourceDatasource": "population_india_census2011"
+    },
+    {
+      "name": "HospitalBedsIndia",
+      "role": "dim",
+      "sourceType": "csv",
+      "sourceFile": "C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Covid_Analysis/HospitalBedsIndia (1).csv",
+      "sourceDatasource": "HospitalBedsIndia (1)"
+    }
+  ],
+  "relationships": [],
+  "measures": [
+    {
+      "table": "StatewiseTestingDetails",
+      "name": "Number of Records",
+      "dax": "COUNTROWS(StatewiseTestingDetails)",
+      "formatString": "0",
+      "displayFolder": null,
+      "description": "Tableau 'Number of Records' (formula = 1) = row count of the testing-details table. COUNTROWS gives the equivalent record count.",
+      "source": "llm"
+    }
+  ],
+  "calculatedColumns": [],
+  "visualDecisions": [
+    {
+      "worksheet": "Sheet 6",
+      "visualType": "columnChart",
+      "reason": "Tableau 'Automatic' mark with State on rows and a Measure Names color split over Negative/Positive/TotalSamples/Number of Records -> a clustered column chart comparing testing measures by State."
+    }
+  ],
+  "fieldParameters": []
+}

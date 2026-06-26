@@ -5,7 +5,7 @@
       "name": "netflix_titles",
       "role": "fact",
       "sourceType": "csv",
-      "sourceFile": "C:/Users/UmeshKumarVermaMAQSo/Desktop/HybridSolution/TableauToPBI-Hybrid/Data/Netflix/netflix_titles.csv"
+      "sourceFile": "C:\\Users\\SiddhiVermaMAQSoftwa\\OneDrive - MAQ Software\\Desktop\\Deterministic\\TableauToPBI-Hybrid\\Data\\Netflix\\netflix_titles.csv"
     }
   ],
   "relationships": [],
@@ -14,10 +14,10 @@
     {
       "table": "netflix_titles",
       "name": "Year",
-      "dax": "netflix_titles[date_added] + 0",
-      "dataType": "datetime",
+      "dax": "netflix_titles[date_added]",
+      "dataType": "dateTime",
       "formatString": "General Date",
-      "description": "Tableau calc 'Year' = DATETIME([date_added]); date_added cast to a datetime value, used as the year-level date axis."
+      "description": "Tableau calc field 'Year' = DATETIME([date_added]); a row-level cast of the Date Added column to datetime."
     }
   ],
   "visualDecisions": [],

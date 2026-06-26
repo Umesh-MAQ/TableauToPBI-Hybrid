@@ -1,0 +1,201 @@
+id,government_id,diagnosed_date,age,gender,detected_city,detected_district,detected_state,nationality,current_status,status_change_date,notes
+1,GID-1,2020-11-12,94,Male,Ahmedabad,West,Telangana,India,Migrated,2020-07-04,Ut adipiscing sed ipsum dolore sit labore amet
+2,GID-2,2021-05-07,27,Male,Jaipur,Suburban,Uttar Pradesh,India,Deceased,2021-06-06,Consectetur sed dolore amet elit eiusmod labore lorem
+3,GID-3,2020-09-17,60,Female,Hyderabad,East,Uttar Pradesh,India,Migrated,2020-12-18,Sed aliqua do sit adipiscing elit lorem incididunt
+4,GID-4,2021-05-25,67,Male,Lucknow,Central,Tamil Nadu,China,Hospitalized,2021-09-18,Ut adipiscing aliqua dolore sit incididunt elit magna
+5,GID-5,2020-07-27,87,Male,Jaipur,West,Andhra Pradesh,India,Deceased,2020-05-16,Consectetur elit adipiscing ut dolore incididunt aliqua et
+6,GID-6,2020-08-01,84,Transgender,Lucknow,South,Tamil Nadu,India,Recovered,2020-03-04,Labore ut dolore dolor sit magna lorem elit
+7,GID-7,2020-05-04,32,Transgender,Pune,East,Kerala,India,Deceased,2021-01-29,Tempor adipiscing do aliqua consectetur eiusmod incididunt ut
+8,GID-8,2021-05-14,64,Female,Pune,Suburban,Tamil Nadu,China,Deceased,2021-08-23,Ut et incididunt dolore aliqua tempor adipiscing dolor
+9,GID-9,2020-05-08,80,Female,Chennai,South,Andhra Pradesh,India,Recovered,2021-07-06,Sit tempor lorem labore amet aliqua ipsum dolor
+10,GID-10,2020-03-23,24,Female,Ahmedabad,West,Rajasthan,United States,Deceased,2020-12-04,Labore elit dolor consectetur lorem sed amet eiusmod
+11,GID-11,2021-05-13,60,Female,Ahmedabad,South,Telangana,China,Recovered,2021-04-02,Do dolore adipiscing et elit consectetur eiusmod amet
+12,GID-12,2020-10-19,42,Female,Lucknow,West,Gujarat,China,Recovered,2021-02-21,Do magna adipiscing aliqua et dolor tempor amet
+13,GID-13,2021-07-14,8,Male,Bengaluru,Suburban,Kerala,India,Recovered,2020-12-09,Magna amet dolore incididunt tempor dolor et labore
+14,GID-14,2020-12-10,93,Female,Bengaluru,Central,Maharashtra,India,Recovered,2021-07-28,Aliqua labore dolore elit ipsum incididunt et sed
+15,GID-15,,94,,,,,,,,
+16,GID-16,2020-06-15,36,Female,Ahmedabad,North,Telangana,India,Deceased,2021-09-08,Eiusmod adipiscing amet sit sed ut magna labore
+17,GID-17,2021-06-16,88,Female,Kolkata,West,Kerala,Italy,Deceased,2020-06-27,Adipiscing labore do et ut magna tempor amet
+18,GID-18,2021-05-19,35,Transgender,Mumbai,Suburban,Kerala,India,Migrated,2021-07-01,Elit consectetur lorem adipiscing incididunt dolore ipsum tempor
+19,GID-19,2021-05-11,81,Male,Jaipur,East,Kerala,United States,Recovered,2020-05-29,Sed elit labore adipiscing amet dolore et lorem
+20,GID-20,2020-09-25,62,Transgender,Hyderabad,East,Tamil Nadu,Italy,Hospitalized,2020-08-07,Tempor magna elit lorem consectetur ipsum do sed
+21,GID-21,2020-05-04,36,Female,Chennai,Suburban,Delhi,India,Hospitalized,2021-08-07,Magna et dolor adipiscing elit lorem eiusmod amet
+22,GID-22,2020-08-29,13,Female,Mumbai,Suburban,Karnataka,India,Migrated,2021-04-08,Aliqua labore eiusmod adipiscing lorem sit elit do
+23,GID-23,2021-05-14,57,Male,Pune,North,Uttar Pradesh,India,Recovered,2020-10-26,Lorem do incididunt tempor eiusmod ut ipsum magna
+24,GID-24,2021-04-01,74,Female,Hyderabad,South,Rajasthan,Italy,Migrated,2020-10-01,Consectetur labore dolor tempor ut magna do adipiscing
+25,GID-25,2021-01-19,41,Female,Jaipur,Suburban,Punjab,China,Hospitalized,2020-06-27,Adipiscing dolor dolore et ut eiusmod magna incididunt
+26,GID-26,2021-06-11,86,Transgender,Delhi,West,Tamil Nadu,Nepal,Recovered,2020-03-03,Et sed lorem aliqua sit dolore dolor do
+27,GID-27,2020-05-28,40,Male,Chennai,Suburban,Maharashtra,Nepal,Migrated,2020-02-23,Adipiscing lorem labore consectetur eiusmod dolor magna tempor
+28,GID-28,2020-10-25,88,Female,Pune,East,Karnataka,China,Hospitalized,2020-04-24,Elit sed dolore aliqua et sit eiusmod magna
+29,GID-29,2021-01-27,28,Male,Hyderabad,East,Tamil Nadu,Italy,Deceased,2021-06-06,Et incididunt ipsum aliqua ut magna labore tempor
+30,GID-30,2021-06-11,22,Transgender,Bengaluru,Suburban,West Bengal,Nepal,Deceased,2021-09-18,Ipsum adipiscing dolor et sit amet magna sed
+31,GID-31,2021-04-17,79,Male,Pune,Central,Uttar Pradesh,China,Migrated,2020-12-31,Aliqua dolor tempor ut do elit labore sit
+32,GID-32,2020-02-09,85,Female,Ahmedabad,Suburban,West Bengal,India,Migrated,2021-02-16,Incididunt sed ipsum consectetur adipiscing tempor do eiusmod
+33,GID-33,2020-04-12,5,Female,Ahmedabad,South,Delhi,India,Hospitalized,2020-08-15,Elit dolore ipsum labore do tempor aliqua adipiscing
+34,GID-34,,53,,,,,,,,
+35,GID-35,2020-02-17,12,Transgender,Hyderabad,South,Punjab,Italy,Hospitalized,2021-02-25,Dolore magna aliqua incididunt sit lorem tempor consectetur
+36,GID-36,2020-08-15,90,Female,Delhi,North,Uttar Pradesh,Italy,Recovered,2021-07-12,Magna tempor amet labore elit do eiusmod ipsum
+37,GID-37,2020-06-03,92,Female,Lucknow,West,West Bengal,China,Migrated,2021-05-15,Dolore tempor do lorem magna et ut ipsum
+38,GID-38,2021-02-01,40,Female,Bengaluru,Central,Punjab,India,Migrated,2020-12-24,Do magna et ut adipiscing elit dolor sed
+39,GID-39,2020-11-15,86,Female,Ahmedabad,South,Maharashtra,India,Recovered,2020-05-08,Dolore tempor magna lorem labore ipsum sed dolor
+40,GID-40,2020-06-19,17,Transgender,Bengaluru,East,West Bengal,Nepal,Recovered,2020-02-17,Elit tempor aliqua lorem incididunt dolore sed magna
+41,GID-41,2020-10-24,3,Female,Lucknow,East,Karnataka,China,Hospitalized,2020-06-28,Sit ut amet aliqua consectetur elit sed adipiscing
+42,GID-42,,79,,,,,,,,
+43,GID-43,2021-06-04,13,Male,Ahmedabad,North,West Bengal,India,Migrated,2020-11-02,Dolore magna lorem et ipsum eiusmod sed incididunt
+44,GID-44,2021-05-28,53,Female,Bengaluru,South,Karnataka,India,Migrated,2021-03-22,Dolore sit do sed eiusmod magna amet incididunt
+45,GID-45,2020-03-17,41,Female,Mumbai,West,Uttar Pradesh,Nepal,Recovered,2020-07-01,Lorem eiusmod magna et sed amet consectetur dolore
+46,GID-46,2020-05-16,20,Male,Bengaluru,South,Telangana,India,Migrated,2020-05-08,Incididunt tempor eiusmod ipsum lorem sit do ut
+47,GID-47,2020-09-02,82,Female,Bengaluru,South,Delhi,Italy,Hospitalized,2021-03-07,Lorem sit dolore amet labore ut sed adipiscing
+48,GID-48,2020-02-18,66,Male,Kolkata,Suburban,Delhi,United States,Recovered,2021-08-26,Dolore elit amet et aliqua consectetur sit ut
+49,GID-49,2020-06-02,69,Male,Jaipur,Central,Delhi,Nepal,Recovered,2020-07-30,Magna dolore amet incididunt aliqua labore ipsum et
+50,GID-50,2020-11-15,3,Female,Hyderabad,Suburban,Tamil Nadu,India,Hospitalized,2020-03-14,Sit dolor elit labore lorem tempor dolore ipsum
+51,GID-51,2020-08-26,5,Female,Jaipur,West,West Bengal,Italy,Recovered,2020-03-24,Incididunt tempor adipiscing ipsum do sit et consectetur
+52,GID-52,2021-07-11,73,Female,Pune,West,Maharashtra,Nepal,Deceased,2020-03-05,Consectetur amet ut et lorem do eiusmod labore
+53,GID-53,2020-04-11,48,Transgender,Bengaluru,North,Kerala,India,Hospitalized,2020-06-06,Labore sit adipiscing et lorem do elit dolor
+54,GID-54,2020-02-06,67,Female,Jaipur,Central,Karnataka,India,Migrated,2021-04-20,Sit consectetur labore adipiscing aliqua lorem elit et
+55,GID-55,2020-06-08,9,Female,Ahmedabad,East,Kerala,India,Recovered,2020-09-23,Consectetur elit sit adipiscing do ipsum et aliqua
+56,GID-56,2021-08-04,22,Male,Hyderabad,South,Gujarat,United States,Deceased,2021-02-02,Sed sit labore tempor dolor ut do incididunt
+57,GID-57,2020-02-16,11,Transgender,Chennai,Suburban,Telangana,India,Hospitalized,2020-03-14,Do consectetur ut adipiscing lorem sed dolore tempor
+58,GID-58,2020-10-01,32,Female,Jaipur,South,Telangana,India,Hospitalized,2020-11-24,Labore sit sed dolor tempor et lorem ipsum
+59,GID-59,2020-04-25,84,Transgender,Chennai,North,Uttar Pradesh,India,Hospitalized,2021-02-27,Ut dolore lorem adipiscing consectetur et incididunt amet
+60,GID-60,2020-04-27,36,Transgender,Delhi,North,Maharashtra,Italy,Migrated,2021-06-30,Amet elit ut consectetur dolor sit aliqua lorem
+61,GID-61,2020-08-12,78,Female,Ahmedabad,North,Andhra Pradesh,United States,Recovered,2020-03-27,Lorem dolore aliqua eiusmod adipiscing et sit magna
+62,GID-62,2021-04-29,23,Transgender,Ahmedabad,East,Karnataka,Nepal,Migrated,2020-03-23,Magna et ipsum sit tempor lorem ut do
+63,GID-63,2021-04-15,95,Male,Ahmedabad,Suburban,Karnataka,China,Recovered,2021-03-28,Do et elit adipiscing aliqua amet dolor consectetur
+64,GID-64,2020-09-06,48,Male,Jaipur,Suburban,Kerala,Nepal,Recovered,2021-08-28,Labore et sit amet consectetur aliqua magna ipsum
+65,GID-65,2021-04-01,26,Male,Pune,Central,Gujarat,Nepal,Hospitalized,2020-04-20,Elit lorem ipsum consectetur magna sed eiusmod ut
+66,GID-66,2020-08-19,61,Transgender,Delhi,Central,Maharashtra,India,Deceased,2021-09-24,Ut aliqua eiusmod incididunt labore tempor et adipiscing
+67,GID-67,2020-09-17,12,Female,Pune,West,West Bengal,Italy,Deceased,2020-03-17,Dolore tempor sed aliqua et incididunt adipiscing elit
+68,GID-68,2020-12-10,36,Female,Kolkata,South,Andhra Pradesh,Italy,Recovered,2021-04-04,Elit sed incididunt sit do consectetur eiusmod ipsum
+69,GID-69,2020-11-02,37,Male,Mumbai,Central,Rajasthan,Italy,Hospitalized,2020-07-19,Consectetur tempor labore aliqua eiusmod elit ut et
+70,GID-70,2020-04-24,81,Female,Kolkata,Central,Gujarat,United States,Hospitalized,2020-04-03,Sed tempor consectetur elit aliqua dolore sit eiusmod
+71,GID-71,2020-04-19,43,Female,Hyderabad,South,Gujarat,India,Deceased,2020-11-30,Sit do eiusmod adipiscing et ipsum ut consectetur
+72,GID-72,2020-12-05,74,Transgender,Bengaluru,Suburban,Karnataka,India,Migrated,2021-02-23,Sit labore dolor sed consectetur et amet elit
+73,GID-73,2020-06-17,63,Transgender,Pune,East,Uttar Pradesh,Nepal,Hospitalized,2021-07-15,Dolore ut lorem incididunt consectetur sit adipiscing et
+74,GID-74,2020-03-13,34,Female,Jaipur,Suburban,Uttar Pradesh,India,Migrated,2021-01-17,Ipsum sed aliqua amet sit magna do labore
+75,GID-75,2020-06-01,52,Female,Pune,Central,Delhi,China,Recovered,2021-01-08,Magna incididunt adipiscing labore ipsum do tempor ut
+76,GID-76,2021-03-29,9,Transgender,Jaipur,West,Punjab,India,Recovered,2021-07-18,Do ut eiusmod et tempor labore amet consectetur
+77,GID-77,2020-09-17,14,Male,Ahmedabad,South,Kerala,India,Recovered,2020-07-25,Dolor ipsum labore magna ut consectetur elit dolore
+78,GID-78,2021-04-07,87,Female,Pune,North,Gujarat,India,Deceased,2021-04-12,Eiusmod et incididunt magna consectetur ut adipiscing sit
+79,GID-79,2020-10-21,82,Transgender,Lucknow,South,Punjab,Nepal,Deceased,2021-04-19,Lorem magna eiusmod do ipsum sit labore amet
+80,GID-80,,1,,,,,,,,
+81,GID-81,2020-09-23,59,Female,Hyderabad,East,Tamil Nadu,China,Recovered,2021-05-13,Lorem consectetur do ut eiusmod labore dolor amet
+82,GID-82,2020-02-27,16,Male,Hyderabad,East,Uttar Pradesh,Nepal,Recovered,2021-08-02,Ut incididunt et amet ipsum sed lorem tempor
+83,GID-83,2021-03-31,29,Female,Jaipur,West,Andhra Pradesh,United States,Recovered,2020-12-14,Eiusmod et consectetur sit ipsum labore ut incididunt
+84,GID-84,2021-07-09,51,Transgender,Mumbai,Suburban,Telangana,India,Hospitalized,2020-06-19,Elit tempor sed labore eiusmod incididunt lorem dolore
+85,GID-85,2020-12-31,41,Male,Mumbai,Central,Tamil Nadu,Italy,Recovered,2021-02-13,Elit consectetur dolor aliqua do et dolore eiusmod
+86,GID-86,2020-09-23,22,Male,Delhi,Central,Gujarat,Nepal,Migrated,2020-08-23,Lorem elit ipsum incididunt ut aliqua labore dolore
+87,GID-87,2021-04-05,33,Female,Jaipur,Suburban,Kerala,India,Deceased,2021-06-14,Et consectetur amet dolor incididunt ipsum tempor do
+88,GID-88,2021-03-24,91,Transgender,Delhi,North,Telangana,India,Hospitalized,2020-08-26,Et sit aliqua sed lorem eiusmod tempor ut
+89,GID-89,2021-03-17,45,Male,Jaipur,East,Karnataka,Italy,Deceased,2020-08-03,Ipsum dolore magna amet consectetur lorem et labore
+90,GID-90,2020-08-26,54,Female,Lucknow,Suburban,Tamil Nadu,Italy,Recovered,2021-09-09,Ut incididunt consectetur labore sit do aliqua eiusmod
+91,GID-91,,85,,,,,,,,
+92,GID-92,2020-07-11,22,Male,Pune,South,Uttar Pradesh,India,Migrated,2021-06-20,Dolore eiusmod adipiscing lorem magna incididunt ipsum consectetur
+93,GID-93,2021-03-26,35,Transgender,Kolkata,Suburban,West Bengal,Nepal,Recovered,2020-04-04,Dolore lorem elit amet dolor adipiscing magna labore
+94,GID-94,2021-04-20,30,Male,Hyderabad,Suburban,Rajasthan,United States,Hospitalized,2020-12-15,Magna do labore elit consectetur tempor dolore dolor
+95,GID-95,2021-02-15,52,Transgender,Kolkata,Central,Uttar Pradesh,China,Recovered,2020-05-06,Do sed eiusmod dolor ut labore magna lorem
+96,GID-96,2020-09-29,42,Transgender,Lucknow,Central,Karnataka,Italy,Recovered,2020-04-21,Consectetur sit labore aliqua elit do eiusmod dolore
+97,GID-97,2020-10-22,71,Transgender,Jaipur,South,Rajasthan,India,Hospitalized,2020-07-06,Lorem amet dolor consectetur adipiscing ut magna aliqua
+98,GID-98,2020-08-01,66,Transgender,Bengaluru,East,Delhi,Nepal,Migrated,2020-05-05,Eiusmod sit aliqua incididunt labore ipsum dolore adipiscing
+99,GID-99,2021-04-05,90,Female,Delhi,West,Gujarat,United States,Migrated,2021-02-11,Sit consectetur ipsum eiusmod incididunt labore aliqua tempor
+100,GID-100,2020-10-09,51,Male,Delhi,South,Gujarat,India,Deceased,2020-11-11,Ipsum aliqua do labore incididunt adipiscing ut dolore
+101,GID-101,2020-10-29,71,Male,Mumbai,East,Karnataka,India,Recovered,2021-07-28,Labore sit et eiusmod sed adipiscing dolore magna
+102,GID-102,2021-01-01,73,Transgender,Mumbai,North,Andhra Pradesh,United States,Deceased,2020-02-28,Ipsum labore et dolor sit magna eiusmod sed
+103,GID-103,2020-06-26,94,Transgender,Bengaluru,North,West Bengal,India,Migrated,2021-08-01,Dolore adipiscing lorem magna ipsum sit elit do
+104,GID-104,2020-02-04,21,Female,Jaipur,West,Uttar Pradesh,Nepal,Recovered,2020-09-07,Dolor ut consectetur aliqua adipiscing incididunt elit amet
+105,GID-105,2021-06-18,30,Transgender,Chennai,East,Punjab,United States,Deceased,2021-07-05,Aliqua labore incididunt ut tempor ipsum sed adipiscing
+106,GID-106,2020-07-11,32,Male,Pune,East,Telangana,India,Migrated,2020-11-02,Eiusmod amet sit aliqua elit ipsum tempor ut
+107,GID-107,2020-02-17,82,Female,Chennai,South,Karnataka,Italy,Recovered,2020-08-22,Consectetur et dolor sed labore magna eiusmod elit
+108,GID-108,2021-05-16,58,Transgender,Mumbai,North,Delhi,Nepal,Recovered,2020-12-29,Lorem amet aliqua dolor do consectetur tempor ut
+109,GID-109,2021-06-26,56,Male,Kolkata,North,Tamil Nadu,China,Recovered,2020-10-31,Adipiscing sed lorem ipsum ut consectetur sit magna
+110,GID-110,2020-04-04,89,Transgender,Pune,Suburban,Maharashtra,India,Recovered,2020-07-21,Elit ut dolore aliqua adipiscing incididunt amet magna
+111,GID-111,2020-05-04,6,Female,Chennai,Suburban,Telangana,Nepal,Recovered,2020-06-18,Dolor ut consectetur tempor do lorem et amet
+112,GID-112,2020-07-09,71,Female,Chennai,Central,Uttar Pradesh,Italy,Hospitalized,2021-07-27,Labore lorem amet ipsum incididunt tempor sed ut
+113,GID-113,2020-09-15,17,Transgender,Pune,West,Tamil Nadu,India,Recovered,2021-09-18,Adipiscing lorem ipsum sit sed dolore dolor do
+114,GID-114,2021-02-24,4,Female,Bengaluru,West,Punjab,India,Hospitalized,2020-12-16,Do magna consectetur tempor sed amet incididunt et
+115,GID-115,2021-04-25,23,Female,Ahmedabad,North,Tamil Nadu,India,Migrated,2021-07-02,Labore sit do dolore tempor sed lorem eiusmod
+116,GID-116,2020-04-16,66,Male,Hyderabad,South,Karnataka,India,Recovered,2020-05-09,Dolor adipiscing magna do ipsum tempor elit sed
+117,GID-117,2020-10-12,2,Female,Bengaluru,West,Karnataka,Nepal,Recovered,2020-12-25,Magna tempor ut aliqua adipiscing sit elit do
+118,GID-118,2020-08-09,66,Transgender,Chennai,East,Rajasthan,United States,Deceased,2021-02-25,Eiusmod dolore ut lorem magna ipsum amet incididunt
+119,GID-119,2020-03-02,38,Male,Kolkata,Central,Kerala,India,Deceased,2021-05-30,Incididunt tempor ut magna amet et sit eiusmod
+120,GID-120,2020-04-11,90,Male,Lucknow,East,Karnataka,Nepal,Migrated,2021-09-15,Dolor do sed eiusmod ut elit sit ipsum
+121,GID-121,2021-01-05,38,Transgender,Chennai,North,Gujarat,Italy,Hospitalized,2020-08-31,Amet magna adipiscing labore ipsum sed dolor et
+122,GID-122,2020-04-18,76,Transgender,Chennai,West,Karnataka,Nepal,Recovered,2021-05-14,Sed ut lorem aliqua do adipiscing tempor ipsum
+123,GID-123,2020-05-17,67,Transgender,Kolkata,South,Punjab,India,Recovered,2020-07-18,Tempor magna sed lorem sit aliqua adipiscing do
+124,GID-124,2021-01-17,62,Male,Delhi,Suburban,Delhi,China,Deceased,2021-07-13,Sit labore consectetur elit eiusmod et incididunt tempor
+125,GID-125,2020-08-30,57,Female,Mumbai,Suburban,Gujarat,India,Deceased,2020-09-14,Dolor sed sit aliqua magna lorem et tempor
+126,GID-126,2020-07-15,85,Transgender,Kolkata,South,Uttar Pradesh,China,Recovered,2020-03-18,Elit adipiscing sed lorem amet magna incididunt eiusmod
+127,GID-127,2021-06-07,70,Female,Bengaluru,West,Punjab,India,Migrated,2021-03-17,Magna labore consectetur dolor et tempor aliqua eiusmod
+128,GID-128,2020-02-27,74,Female,Delhi,Central,Andhra Pradesh,United States,Hospitalized,2020-07-22,Dolore tempor magna ut elit aliqua eiusmod dolor
+129,GID-129,2021-01-23,78,Female,Pune,East,Maharashtra,India,Recovered,2020-02-29,Elit sit consectetur magna ut tempor labore aliqua
+130,GID-130,2020-04-03,33,Female,Lucknow,Suburban,Telangana,India,Hospitalized,2021-06-09,Do elit magna et sit consectetur eiusmod ipsum
+131,GID-131,2020-06-27,83,Transgender,Hyderabad,East,Maharashtra,India,Migrated,2020-04-02,Adipiscing sed ipsum dolor do incididunt elit et
+132,GID-132,2020-09-09,92,Male,Ahmedabad,Central,Tamil Nadu,India,Recovered,2021-09-03,Dolor sit ut do consectetur ipsum et sed
+133,GID-133,2020-04-18,18,Transgender,Lucknow,North,Punjab,Italy,Hospitalized,2020-10-05,Do tempor ipsum adipiscing eiusmod aliqua dolor consectetur
+134,GID-134,2020-09-05,57,Male,Jaipur,North,Tamil Nadu,Italy,Hospitalized,2020-03-06,Et consectetur amet sit ut ipsum labore adipiscing
+135,GID-135,,48,,,,,,,,
+136,GID-136,2020-10-10,8,Transgender,Ahmedabad,Suburban,Gujarat,China,Migrated,2020-06-30,Magna elit sed et lorem adipiscing incididunt ut
+137,GID-137,2021-08-04,48,Transgender,Hyderabad,West,Gujarat,United States,Deceased,2021-08-08,Dolore lorem dolor et adipiscing elit do sit
+138,GID-138,2020-04-15,84,Female,Chennai,Central,Rajasthan,India,Deceased,2021-07-19,Ut ipsum eiusmod aliqua labore adipiscing amet elit
+139,GID-139,2020-10-30,88,Transgender,Ahmedabad,East,Andhra Pradesh,United States,Hospitalized,2020-06-26,Amet magna dolore ut tempor ipsum et adipiscing
+140,GID-140,2021-03-04,74,Male,Jaipur,East,Gujarat,China,Hospitalized,2020-05-11,Dolor do sed eiusmod et adipiscing aliqua elit
+141,GID-141,2020-11-21,91,Transgender,Ahmedabad,North,Kerala,United States,Recovered,2020-09-30,Elit sit adipiscing lorem incididunt dolore do magna
+142,GID-142,2020-08-21,11,Male,Mumbai,North,West Bengal,India,Migrated,2021-04-28,Labore sit dolor eiusmod tempor do magna elit
+143,GID-143,2020-09-03,36,Transgender,Hyderabad,Suburban,Delhi,China,Recovered,2021-03-26,Ipsum elit do ut incididunt magna sed aliqua
+144,GID-144,2021-03-17,31,Female,Chennai,West,Karnataka,India,Hospitalized,2021-03-20,Do aliqua sit lorem magna elit consectetur tempor
+145,GID-145,2021-01-24,77,Female,Mumbai,Suburban,Delhi,India,Migrated,2020-10-15,Ut tempor incididunt ipsum sed eiusmod labore sit
+146,GID-146,2020-08-25,17,Female,Kolkata,North,Karnataka,United States,Recovered,2020-07-02,Labore do sed elit ut et dolor tempor
+147,GID-147,2020-11-24,54,Female,Bengaluru,South,Tamil Nadu,Nepal,Migrated,2020-11-10,Incididunt dolore eiusmod ut do dolor consectetur sed
+148,GID-148,2020-10-22,33,Male,Ahmedabad,West,Rajasthan,India,Recovered,2021-08-28,Dolor consectetur magna do adipiscing sed et amet
+149,GID-149,2021-07-27,74,Male,Ahmedabad,North,Andhra Pradesh,India,Recovered,2020-04-24,Eiusmod tempor sit do incididunt et lorem consectetur
+150,GID-150,2020-08-10,89,Male,Kolkata,Suburban,Telangana,Nepal,Hospitalized,2021-09-07,Tempor ut consectetur labore adipiscing elit dolore dolor
+151,GID-151,2020-04-21,78,Female,Lucknow,North,Gujarat,China,Recovered,2020-05-17,Incididunt magna tempor dolor dolore adipiscing eiusmod et
+152,GID-152,2021-01-01,1,Transgender,Lucknow,Central,Punjab,India,Recovered,2021-04-19,Lorem magna do sit ut adipiscing eiusmod tempor
+153,GID-153,2021-05-11,24,Male,Bengaluru,North,Telangana,India,Migrated,2020-03-14,Labore ipsum sed elit aliqua dolor et dolore
+154,GID-154,2021-06-07,32,Transgender,Kolkata,Suburban,Rajasthan,India,Deceased,2020-03-05,Lorem sed consectetur ut sit tempor adipiscing amet
+155,GID-155,2020-06-13,43,Male,Pune,East,Delhi,United States,Hospitalized,2020-11-12,Sit ipsum amet eiusmod lorem tempor ut et
+156,GID-156,2021-02-08,44,Transgender,Lucknow,East,Gujarat,China,Deceased,2021-02-02,Consectetur ipsum ut dolor do sit aliqua magna
+157,GID-157,2021-06-27,19,Male,Lucknow,South,Tamil Nadu,Nepal,Recovered,2021-08-20,Et labore aliqua ut incididunt tempor sit do
+158,GID-158,2020-11-09,1,Transgender,Lucknow,Central,Delhi,India,Deceased,2020-06-27,Aliqua sed consectetur lorem incididunt do magna eiusmod
+159,GID-159,2020-05-09,40,Transgender,Ahmedabad,East,Andhra Pradesh,Nepal,Hospitalized,2020-05-07,Amet lorem aliqua do dolor dolore labore ipsum
+160,GID-160,2021-03-30,40,Male,Chennai,East,Rajasthan,Italy,Hospitalized,2020-09-22,Et do dolore ipsum labore ut elit sed
+161,GID-161,2021-02-23,16,Male,Bengaluru,East,Telangana,India,Migrated,2021-01-09,Do magna consectetur lorem eiusmod elit aliqua et
+162,GID-162,2020-11-18,70,Transgender,Chennai,South,Maharashtra,Italy,Migrated,2020-10-20,Dolor do dolore tempor ut incididunt adipiscing sed
+163,GID-163,2020-09-04,59,Female,Pune,Central,Telangana,India,Deceased,2020-10-03,Ipsum incididunt elit dolor lorem et aliqua dolore
+164,GID-164,2020-04-04,45,Male,Bengaluru,South,Gujarat,India,Migrated,2021-06-29,Ut labore sit do adipiscing tempor ipsum amet
+165,GID-165,,33,,,,,,,,
+166,GID-166,2020-02-04,32,Female,Ahmedabad,West,Delhi,Nepal,Hospitalized,2020-11-27,Aliqua dolor labore magna lorem sed consectetur adipiscing
+167,GID-167,2021-05-09,57,Female,Pune,North,Uttar Pradesh,India,Recovered,2021-05-05,Eiusmod et lorem aliqua sit sed dolore amet
+168,GID-168,2021-06-29,43,Female,Chennai,Central,Tamil Nadu,Italy,Migrated,2021-02-17,Do et ut sed ipsum elit magna adipiscing
+169,GID-169,2020-09-30,74,Transgender,Mumbai,East,Telangana,India,Deceased,2020-05-22,Amet incididunt consectetur sed aliqua eiusmod et dolor
+170,GID-170,2020-08-11,35,Female,Kolkata,South,Punjab,India,Migrated,2021-04-14,Consectetur amet ut aliqua dolor elit adipiscing tempor
+171,GID-171,2021-06-12,44,Female,Kolkata,East,Tamil Nadu,India,Hospitalized,2021-07-26,Incididunt adipiscing consectetur magna dolore et aliqua labore
+172,GID-172,2020-08-23,24,Female,Kolkata,South,Delhi,India,Hospitalized,2020-09-30,Ut dolor dolore sit ipsum sed tempor eiusmod
+173,GID-173,2021-06-07,56,Transgender,Pune,West,Delhi,United States,Deceased,2020-11-10,Aliqua incididunt et ipsum eiusmod do sit ut
+174,GID-174,2020-02-12,43,Transgender,Mumbai,Suburban,Uttar Pradesh,India,Migrated,2021-07-11,Consectetur sed dolore tempor elit amet adipiscing dolor
+175,GID-175,2021-01-31,29,Female,Pune,Central,Punjab,Nepal,Deceased,2020-08-09,Sit adipiscing labore tempor amet dolore eiusmod sed
+176,GID-176,2020-04-22,62,Female,Chennai,Suburban,Rajasthan,United States,Recovered,2020-10-22,Ipsum amet tempor ut eiusmod incididunt aliqua et
+177,GID-177,2021-05-20,50,Male,Bengaluru,Central,Karnataka,United States,Deceased,2021-08-17,Consectetur elit incididunt tempor dolor magna do sed
+178,GID-178,2020-06-02,63,Transgender,Jaipur,South,Rajasthan,China,Hospitalized,2020-11-29,Dolore lorem consectetur amet adipiscing labore sed ipsum
+179,GID-179,2020-04-17,14,Transgender,Kolkata,West,Maharashtra,Italy,Hospitalized,2020-11-16,Amet adipiscing consectetur ipsum dolor sed et elit
+180,GID-180,2021-03-29,70,Male,Chennai,Suburban,West Bengal,Nepal,Hospitalized,2020-06-11,Labore amet incididunt eiusmod consectetur lorem magna adipiscing
+181,GID-181,2020-06-05,12,Female,Bengaluru,North,Uttar Pradesh,Nepal,Recovered,2021-05-25,Consectetur sed ipsum eiusmod amet lorem aliqua tempor
+182,GID-182,2021-08-07,90,Transgender,Chennai,West,Rajasthan,Italy,Recovered,2020-10-31,Adipiscing eiusmod et sed labore do sit elit
+183,GID-183,,86,,,,,,,,
+184,GID-184,2020-11-10,88,Male,Delhi,Suburban,Uttar Pradesh,India,Hospitalized,2020-09-03,Tempor aliqua elit ut incididunt do dolore sed
+185,GID-185,2020-06-17,20,Transgender,Bengaluru,North,Gujarat,China,Hospitalized,2021-08-24,Consectetur incididunt elit do magna aliqua dolor labore
+186,GID-186,2021-03-12,68,Transgender,Pune,West,West Bengal,United States,Migrated,2021-08-13,Dolore labore magna ut ipsum adipiscing tempor consectetur
+187,GID-187,2021-01-26,26,Male,Chennai,Central,Uttar Pradesh,Italy,Hospitalized,2021-08-11,Sed elit ipsum sit adipiscing dolor amet aliqua
+188,GID-188,2020-03-01,19,Female,Hyderabad,North,Punjab,China,Recovered,2020-08-27,Elit amet magna incididunt et dolore ipsum labore
+189,GID-189,2020-05-20,33,Male,Lucknow,South,Uttar Pradesh,United States,Hospitalized,2021-09-22,Amet magna et elit dolor ut lorem incididunt
+190,GID-190,2020-01-30,53,Transgender,Pune,East,Delhi,India,Migrated,2020-12-18,Elit eiusmod aliqua tempor sed magna adipiscing dolore
+191,GID-191,2020-08-08,89,Male,Chennai,East,Delhi,United States,Hospitalized,2020-12-21,Elit eiusmod et do tempor consectetur amet magna
+192,GID-192,2021-02-10,46,Female,Jaipur,Central,Uttar Pradesh,United States,Deceased,2021-05-16,Dolor magna ipsum labore tempor incididunt eiusmod elit
+193,GID-193,,14,,,,,,,,
+194,GID-194,2020-09-29,88,Female,Lucknow,Suburban,West Bengal,United States,Recovered,2020-07-25,Labore consectetur dolor incididunt aliqua do dolore amet
+195,GID-195,2021-03-03,87,Male,Delhi,North,Tamil Nadu,India,Deceased,2020-10-12,Incididunt eiusmod lorem amet elit sed ut et
+196,GID-196,2021-02-15,41,Female,Pune,South,Uttar Pradesh,United States,Recovered,2020-02-22,Et labore dolor ipsum eiusmod aliqua tempor incididunt
+197,GID-197,2020-04-20,85,Male,Bengaluru,Central,West Bengal,China,Migrated,2020-05-20,Labore consectetur amet ipsum et elit eiusmod sit
+198,GID-198,2021-05-31,31,Female,Ahmedabad,Central,Gujarat,India,Deceased,2021-05-24,Amet dolor lorem consectetur incididunt do ipsum sit
+199,GID-199,,71,,,,,,,,
+200,GID-200,2021-03-05,24,Female,Delhi,West,West Bengal,Nepal,Hospitalized,2020-07-15,Magna tempor labore sed dolor ipsum ut elit

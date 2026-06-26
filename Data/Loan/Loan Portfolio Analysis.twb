@@ -37,7 +37,7 @@
       <connection class='federated'>
         <named-connections>
           <named-connection caption='loan' name='textscan.11f0uyf0t6tf2u10wow0g1v23en5'>
-            <connection class='textscan' directory='C:/Users/AmanRajMAQSoftware/Downloads/semantic model generation v2/semantic model generation v2/Data/Loan/Loan Portfolio Analysis.twb Files/Data/archive (1)' filename='loan.csv' password='' server='' />
+            <connection class='textscan' directory='C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Loan' filename='loan.csv' password='' server='' />
           </named-connection>
         </named-connections>
         <relation connection='textscan.11f0uyf0t6tf2u10wow0g1v23en5' name='loan.csv' table='[loan#csv]' type='table'>
@@ -390,7 +390,7 @@
       <connection class='federated'>
         <named-connections>
           <named-connection caption='loan_count_by_year' name='textscan.09i6s5m0r2njav1dsm7v90hfsp44'>
-            <connection class='textscan' directory='C:/Users/AmanRajMAQSoftware/Downloads/semantic model generation v2/semantic model generation v2/Data/Loan/Loan Portfolio Analysis.twb Files/Data/archive (1)' filename='loan_count_by_year.csv' password='' server='' />
+            <connection class='textscan' directory='C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Loan' filename='loan_count_by_year.csv' password='' server='' />
           </named-connection>
         </named-connections>
         <relation connection='textscan.09i6s5m0r2njav1dsm7v90hfsp44' name='loan_count_by_year.csv' table='[loan_count_by_year#csv]' type='table'>
@@ -470,7 +470,7 @@
       <connection class='federated'>
         <named-connections>
           <named-connection caption='loan_purposes' name='textscan.15sup2a0p2fg6z1f298u01nt9sj9'>
-            <connection class='textscan' directory='C:/Users/AmanRajMAQSoftware/Downloads/semantic model generation v2/semantic model generation v2/Data/Loan/Loan Portfolio Analysis.twb Files/Data/archive (1)' filename='loan_purposes.csv' password='' server='' />
+            <connection class='textscan' directory='C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Loan' filename='loan_purposes.csv' password='' server='' />
           </named-connection>
         </named-connections>
         <relation connection='textscan.15sup2a0p2fg6z1f298u01nt9sj9' name='loan_purposes.csv' table='[loan_purposes#csv]' type='table'>
@@ -537,7 +537,7 @@
       <connection class='federated'>
         <named-connections>
           <named-connection caption='loan_with_region' name='textscan.0m6tkym0tuw2n119mi17e16hx5hj'>
-            <connection class='textscan' directory='C:/Users/AmanRajMAQSoftware/Downloads/semantic model generation v2/semantic model generation v2/Data/Loan/Loan Portfolio Analysis.twb Files/Data/archive (1)' filename='loan_with_region.csv' password='' server='' />
+            <connection class='textscan' directory='C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Loan' filename='loan_with_region.csv' password='' server='' />
           </named-connection>
         </named-connections>
         <relation connection='textscan.0m6tkym0tuw2n119mi17e16hx5hj' name='loan_with_region.csv' table='[loan_with_region#csv]' type='table'>
@@ -635,7 +635,7 @@
       <connection class='federated'>
         <named-connections>
           <named-connection caption='state_region' name='textscan.18o7hqn1yjvkwp1dc48fd0hascz6'>
-            <connection class='textscan' directory='C:/Users/AmanRajMAQSoftware/Downloads/semantic model generation v2/semantic model generation v2/Data/Loan/Loan Portfolio Analysis.twb Files/Data/archive (1)' filename='state_region.csv' password='' server='' />
+            <connection class='textscan' directory='C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Loan' filename='state_region.csv' password='' server='' />
           </named-connection>
         </named-connections>
         <relation connection='textscan.18o7hqn1yjvkwp1dc48fd0hascz6' name='state_region.csv' table='[state_region#csv]' type='table'>
@@ -745,7 +745,7 @@
       <connection class='federated'>
         <named-connections>
           <named-connection caption='customer' name='textscan.1cpegip01sbamo128d3ii16v5d02'>
-            <connection class='textscan' directory='C:/Users/AmanRajMAQSoftware/Downloads/semantic model generation v2/semantic model generation v2/Data/Loan' filename='customer.csv' password='' server='' />
+            <connection class='textscan' directory='C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Loan' filename='customer.csv' password='' server='' />
           </named-connection>
         </named-connections>
         <relation type='collection'>

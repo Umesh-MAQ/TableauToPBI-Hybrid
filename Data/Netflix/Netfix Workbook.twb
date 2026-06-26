@@ -31,10 +31,10 @@
       <connection class='federated'>
         <named-connections>
           <named-connection caption='netflix_titles' name='textscan.1wt8lm40wl50jn1gfoyoo110f38u'>
-            <connection class='textscan' cleaning='yes' compat='no' csvFile='C:/Users/UmeshKumarVermaMAQSo/Desktop/HybridSolution/TableauToPBI-Hybrid/Data/Netflix/netflix_titles.csv' dataRefreshTime='' directory='C:/Users/UmeshKumarVermaMAQSo/Desktop/HybridSolution/TableauToPBI-Hybrid/Data/Netflix' filename='netflix_titles.csv' interpretationMode='8' password='' server='' validate='no' />
+            <connection class='textscan' cleaning='yes' compat='no' csvFile='C:/Users/UmeshKumarVermaMAQSo/Desktop/HybridSolution/TableauToPBI-Hybrid/Data/Netflix/netflix_titles.csv' dataRefreshTime='' directory='C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Netflix' filename='netflix_titles.csv' interpretationMode='8' password='' server='' validate='no' />
           </named-connection>
           <named-connection caption='netflix_titles (2)' name='textscan.1uleo1l0np15021fmywz006i5xos'>
-            <connection class='textscan' directory='C:/Users/UmeshKumarVermaMAQSo/Desktop/HybridSolution/TableauToPBI-Hybrid/Data/Netflix' filename='netflix_titles.csv' password='' server='' />
+            <connection class='textscan' directory='C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Netflix' filename='netflix_titles.csv' password='' server='' />
           </named-connection>
         </named-connections>
         <relation connection='textscan.1uleo1l0np15021fmywz006i5xos' name='netflix_titles.csv' table='[netflix_titles#csv]' type='table'>

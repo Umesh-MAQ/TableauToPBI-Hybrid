@@ -94,6 +94,43 @@ def measure_list(decisions: Dict) -> List[str]:
     return [m["name"] for m in decisions.get("measures", [])]
 
 
+def measure_entity_map(decisions: Dict) -> Dict[str, str]:
+    """Measure name -> the model table that DEFINES it.
+
+    In a multi-source (single-flat-per-CSV) model a measure lives on the table
+    that owns its column, NOT necessarily the fact. A visual must reference a
+    measure through its owning table's entity, otherwise Power BI can't resolve
+    it (e.g. ``Sum of TotalCases`` belongs to ``AgeGroupDetails``, not the
+    ``covid_19_india`` fact).
+    """
+    return {m["name"]: m["table"] for m in decisions.get("measures", [])
+            if m.get("name") and m.get("table")}
+
+
+def measure_entity(name: Optional[str], decisions: Dict, default: str) -> str:
+    """Owning table of a measure, or ``default`` when it carries no table."""
+    if not name:
+        return default
+    return measure_entity_map(decisions).get(name, default)
+
+
+def ws_own_dim(ws: Optional[Dict], cols: Set[str]) -> Optional[str]:
+    """First dimension a worksheet actually plots (its own shelf), or None.
+
+    Used as the category fallback so a chart whose category the agent left
+    unresolved binds to the worksheet's OWN dimension (e.g. Sheet 3 -> AgeGroup)
+    instead of the global first dimension column, which may belong to an
+    unrelated table and silently mis-connect the visual.
+    """
+    if not ws:
+        return None
+    for key in ("dimensions", "rows", "cols"):
+        for d in ws.get(key) or []:
+            if isinstance(d, str) and d in cols:
+                return base_field(d)
+    return None
+
+
 def display_units_map(decisions: Dict, ir: Dict) -> Dict[str, int]:
     """Measure name -> Power BI Display-units divisor (1 / 1000 / 1_000_000 / …)
     derived from each measure's Tableau number format. Reuses the model emitter so
@@ -274,6 +311,12 @@ def color_field(ws: Optional[Dict], ir: Dict, cols: Set[str]) -> Optional[str]:
     c = decode_field(enc.get("color")) or decode_field(enc.get("text"))
     if c and c in cols:
         return c
+    # Prefer the worksheet's OWN plotted dimension before the global first column,
+    # so a category-less pie binds to this sheet's dimension (Sheet 3 -> AgeGroup)
+    # rather than an unrelated table's column.
+    own = ws_own_dim(ws, cols)
+    if own:
+        return own
     return first_dim_col(ir)
 
 
@@ -348,7 +391,20 @@ def _owned_columns(table: Dict, ir: Dict) -> Set[str]:
     if table.get("sourceFile"):
         probe = ET._probe_for_table(table, ir)
         if probe and probe.get("columns"):
-            return {c["name"] for c in probe["columns"]}
+            # emit_tmdl anchors a table's columns on its OWN CSV header (raw
+            # ``csv_name``), so a model column is the physical header, not the
+            # logical name the global IR map may collide onto. Several CSVs that
+            # expose case-variant duplicates (``State`` vs ``state``) would
+            # otherwise all resolve to one logical name and mis-route bindings.
+            # Claim both the raw header and the logical name so each field binds
+            # to the table that physically holds it.
+            owned: Set[str] = set()
+            for c in probe["columns"]:
+                if c.get("csv_name"):
+                    owned.add(c["csv_name"])
+                if c.get("name"):
+                    owned.add(c["name"])
+            return owned
     return {c["name"] for c in ir.get("columns", []) if c.get("datasource") == src}
 
 
@@ -461,7 +517,10 @@ def category_binding(ws: Optional[Dict], entity: str, cols: Set[str],
             if ws else None
         if dcol:
             return {"entity": entity, "prop": D.part_column_name(dcol, level)}
-    dim = first_dim_col(ir)
+    # Prefer the worksheet's OWN dimension over the global first column so a
+    # category-less chart binds to a column this sheet actually plots (and to the
+    # table that owns it), instead of an unrelated table's first dimension.
+    dim = ws_own_dim(ws, cols) or first_dim_col(ir)
     return {"entity": _ent(dim) if dim else entity,
             "prop": dim or (next(iter(cols)) if cols else "Column")}
 

@@ -46,7 +46,7 @@
       <connection class='federated'>
         <named-connections>
           <named-connection caption='Customers' name='textscan.1162ej80t9cqpf18pbubh0zbdqpi'>
-            <connection class='textscan' directory='C:/Users/AmanRajMAQSoftware/Downloads/Sales and Customer Dashboards/datasets/eu' filename='Customers.csv' password='' server='' workgroup-auth-mode='as-is' />
+            <connection class='textscan' directory='C:/Users/SiddhiVermaMAQSoftwa/OneDrive - MAQ Software/Desktop/Deterministic/TableauToPBI-Hybrid/Data/Sales and Customer' filename='Customers.csv' password='' server='' workgroup-auth-mode='as-is' />
           </named-connection>
         </named-connections>
         <relation type='collection'>
@@ -714,7 +714,7 @@
           <groupfilter function='level-members' level='[wk:Order Date:ok]' />
         </groupfilter>
       </group>
-      <extract _.fcp.VConnDownstreamExtractsWithWarnings.true...user-specific='false' count='-1' enabled='true' object-id='' units='records'>
+      <extract _.fcp.VConnDownstreamExtractsWithWarnings.true...user-specific='false' count='-1' enabled='false' object-id='' units='records'>
         <connection access_mode='readonly' author-locale='en_GB' class='hyper' dbname='C:/Users/AmanRajMAQSoftware/Downloads/Sales and Customer Dashboards/Data/Sales &amp; Customer Dashboards.twb Files/federated.hyper' default-settings='hyper' schema='Extract' sslmode='' tablename='Extract' update-time='05/08/2026 04:36:09 AM' username=''>
           <relation type='collection'>
             <relation name='Orders.csv_905AF3F5FECA431C80766E0C0C188760' table='[Extract].[Orders.csv_905AF3F5FECA431C80766E0C0C188760]' type='table' />
